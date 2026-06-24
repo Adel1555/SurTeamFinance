@@ -1,0 +1,160 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Tajawal:wght@300;400;550;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Tajawal", "Cairo", system-ui, sans-serif;
+  --font-display: "Cairo", "Tajawal", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@layer base {
+  body {
+    transition: background-color 0.4s cubic-bezier(0.16, 1, 0.3, 1), color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    direction: rtl;
+    font-family: "Tajawal", "Cairo", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(
+      135deg,
+      #EAF6FF 0%,
+      #D9F0FF 40%,
+      #C7E8FF 100%
+    );
+    background-attachment: fixed;
+    color: #1e293b;
+  }
+}
+
+/* Custom background classes for content matching */
+.bg-light-finance {
+  background: linear-gradient(
+    135deg,
+    #EAF6FF 0%,
+    #D9F0FF 40%,
+    #C7E8FF 100%
+  ) !important;
+  background-attachment: fixed !important;
+}
+
+.bg-dark-finance {
+  background: linear-gradient(
+    135deg,
+    #0B1F3A 0%,
+    #112B4A 50%,
+    #16385C 100%
+  ) !important;
+  background-attachment: fixed !important;
+}
+
+.dark body {
+  background: linear-gradient(
+    135deg,
+    #0B1F3A 0%,
+    #112B4A 50%,
+    #16385C 100%
+  );
+  background-attachment: fixed;
+  color: #f4f4f5;
+}
+
+/* Custom card soft glow & boundary illumination styled perfectly */
+.finance-glow-card {
+  box-shadow: 
+    0 0 8px rgba(80, 170, 255, 0.15), 
+    0 0 20px rgba(80, 170, 255, 0.08) !important;
+  border-color: rgba(80, 170, 255, 0.22) !important;
+}
+
+.dark .finance-glow-card {
+  box-shadow: 
+    0 0 10px rgba(80, 170, 255, 0.16), 
+    0 0 25px rgba(80, 170, 255, 0.06),
+    inset 0 1px 0px rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(80, 170, 255, 0.2) !important;
+}
+
+/* Base custom interactive states */
+.premium-glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.04), 0 0 15px -3px var(--primary-glow, rgba(0, 0, 0, 0.02));
+}
+
+.dark .premium-glass {
+  background: rgba(15, 15, 20, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6), 0 0 25px -4px var(--primary-color-alpha, rgba(239, 68, 68, 0.15));
+}
+
+/* Customized scrollbar design for the pristine 2026 feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 99px;
+  border: 1px solid transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.20);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-spin-slow {
+  animation: spin 10s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Glowing Soft Effects */
+.glow-primary {
+  box-shadow: 0 0 20px -3px var(--primary-color-alpha, rgba(14, 165, 233, 0.15));
+}
+
+.glow-emerald {
+  box-shadow: 0 0 20px -3px rgba(16, 185, 129, 0.15);
+}
+
+.glow-rose {
+  box-shadow: 0 0 20px -3px rgba(244, 63, 94, 0.15);
+}
+
+/* Sleek premium border highlight with glow */
+.premium-border-glow {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.premium-border-glow:hover {
+  box-shadow: 0 0 25px -4px var(--primary-color-alpha, rgba(14, 165, 233, 0.2));
+  border-color: var(--primary-color, #0ea5e9);
+}
+

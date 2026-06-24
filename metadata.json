@@ -1,0 +1,6 @@
+{
+  "name": "فريق صور التطوعي",
+  "description": "البرنامج المالي لفريق صور التطوعي لإدارة سندات القبض والصرف والتقارير والهوية البصرية",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
