@@ -25,7 +25,7 @@ jobs:
         run: npm install
 
       - name: Build React and Package Electron Windows Installer
-        run: npm run dist
+        run: npm run dist -- --publish=never
 
       - name: Upload Windows Installer Setup Artifact
         uses: actions/upload-artifact@v4
