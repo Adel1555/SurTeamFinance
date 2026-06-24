@@ -1,4 +1,5 @@
 import React from 'react';
+import logoUrl from '../../public/assets/logo.png';
 
 interface LogoProps {
   className?: string;
@@ -10,7 +11,7 @@ export default function Logo({ className = '', size = 40, showText = false }: Lo
   return (
     <div className={`flex items-center gap-2.5 flex-row-reverse select-none ${className}`}>
       <img
-        src="/assets/logo.png"
+        src={logoUrl}
         alt="Sur Volunteer Team Logo"
         style={{ width: size, height: size, objectFit: 'contain' }}
         className="shrink-0 drop-shadow-sm transition-transform duration-300 hover:scale-105"
