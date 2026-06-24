@@ -18,13 +18,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
 
       - name: Install Dependencies
         run: npm install
 
-      - name: Build React and Package Electron Windows Installer
+      - name: Install ImageMagick
+        run: choco install imagemagick -y
+
+      - name: Generate Windows Icon
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build
+          magick public/assets/logo.png -resize 1024x1024 -background none -gravity center -extent 1024x1024 build/icon.png
+          magick build/icon.png -define icon:auto-resize=256,128,64,48,32,16 build/icon.ico
+          Get-Item build/icon.ico
+
+      - name: Build Windows Installer
         run: npm run dist
 
       - name: Upload Windows Installer Setup Artifact
