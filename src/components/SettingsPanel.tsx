@@ -509,102 +509,64 @@ export default function SettingsPanel({
             </div>
 
             {/* Dynamic Card for showing update Status strictly without developer inputs */}
-            <div className="flex flex-col justify-between">
-              {isCheckingUpdates ? (
-                <div className="h-full p-6 bg-blue-500/5 border border-blue-500/10 rounded-xl flex flex-col items-center justify-center gap-3 text-center">
-                  <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
-                  <p className="text-xs font-bold text-gray-700 dark:text-gray-250">جاري فحص الإصدار المحمّل من Github...</p>
-                  <p className="text-[10px] text-gray-450 dark:text-gray-400">الرجاء الانتظار قليلاً أثناء قراءة ملف الترقية الآمن.</p>
-                </div>
-              ) : updateError && !updateState ? (
-                <div className="h-full p-4 bg-zinc-500/5 border border-zinc-500/10 rounded-xl flex flex-col justify-center space-y-1.5">
-                  <div className="flex items-center gap-2 flex-row-reverse text-zinc-500">
+            <div className="flex flex-col justify-between p-4 rounded-xl bg-slate-50/50 dark:bg-zinc-900/40 border border-gray-100 dark:border-zinc-800 space-y-4">
+              <div>
+                <span className="text-xs font-bold text-gray-500 block mb-2">حالة التحديث (Update Status):</span>
+                {isCheckingUpdates ? (
+                  <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-xl flex items-center gap-3">
+                    <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-250">جاري فحص الإصدار من السيرفر...</span>
+                  </div>
+                ) : updateError && !updateState ? (
+                  <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-xl flex items-center gap-2 text-red-500">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <strong className="text-xs font-bold">تعذر التحقق من التحديثات</strong>
+                    <span className="text-xs font-bold">تعذر التحقق من التحديثات حالياً</span>
                   </div>
-                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
-                    لم نتمكن من جلب ملف التحديثات من الخادم السحابي حالياً. الرجاء مراجعة اتصال الإنترنت الخاص بك.
+                ) : updateState && updateState.updateAvailable && isVersionNewer(currentVersion, updateState.latestVersion) && updateState.downloadUrl ? (
+                  <div className="p-3 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                    <AlertTriangle className="w-4 h-4 shrink-0 animate-bounce" />
+                    <span className="text-xs font-black">يتوفر ميزات جديدة (إصدار v{updateState.latestVersion})</span>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-xl flex items-center gap-2 text-emerald-600">
+                    <Check className="w-4 h-4" />
+                    <span className="text-xs font-extrabold text-emerald-800 dark:text-emerald-400">التطبيق يعمل بأحدث إصدار محاسبي</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Release Notes Segment */}
+              {updateState && updateState.updateAvailable && isVersionNewer(currentVersion, updateState.latestVersion) && updateState.releaseNotes && (
+                <div className="space-y-1">
+                  <span className="text-xs font-bold text-gray-500 block">ملاحظات الإصدار (Release Notes):</span>
+                  <p className="text-[10.5px] leading-relaxed text-gray-600 dark:text-gray-300 font-sans max-h-24 overflow-y-auto bg-white/45 dark:bg-zinc-950/45 p-2.5 rounded-lg border border-gray-150/40 dark:border-zinc-800/40 scrollbar-thin">
+                    {updateState.releaseNotes}
                   </p>
-                </div>
-              ) : updateState && updateState.updateAvailable && updateState.latestVersion !== ignoredVersion ? (
-                /* Beautiful Professional Update Notification Card */
-                <div className="p-4 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 text-right rounded-xl flex flex-col justify-between h-full space-y-3">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between flex-row-reverse">
-                      <span className="bg-amber-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full animate-bounce">متاح للتحميل</span>
-                      <strong className="text-xs font-black text-amber-850 dark:text-amber-400">🚨 يتوفر ميزات محاسبية جديدة (إصدار v{updateState.latestVersion})</strong>
-                    </div>
-
-                    {updateState.releaseNotes && (
-                      <div className="space-y-1">
-                        <span className="text-[10px] text-gray-400 block border-b border-orange-500/10 pb-0.5 font-bold">سجل تطوير الميزات والترقيات:</span>
-                        <p className="text-[10.5px] leading-relaxed text-gray-600 dark:text-gray-300 font-sans max-h-24 overflow-y-auto bg-white/40 dark:bg-zinc-950/40 p-2 rounded-lg scrollbar-thin">
-                          {updateState.releaseNotes}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    {updateState.downloadUrl && (
-                      <button
-                        type="button"
-                        disabled={isPreparingDownload}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (isPreparingDownload) return;
-                          setIsPreparingDownload(true);
-                          setTimeout(() => {
-                            window.open(updateState.downloadUrl, '_blank', 'noopener,noreferrer');
-                            setIsPreparingDownload(false);
-                          }, 1500);
-                        }}
-                        className="w-full py-2 bg-gradient-to-l from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 font-black text-white text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 text-center cursor-pointer disabled:opacity-75 disabled:cursor-wait"
-                      >
-                        <Download className={`w-3.5 h-3.5 ${isPreparingDownload ? 'animate-spin' : 'animate-bounce'}`} />
-                        {isPreparingDownload ? 'جاري إعداد التحميل وتحويلك لصفحة التثبيت...' : 'تنزيل ملف التثبيت المحدث (.exe)'}
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onIgnoreVersion(updateState.latestVersion);
-                        showToast(`🔇 تم تجاهل إشعارات الإصدار v${updateState.latestVersion}`);
-                      }}
-                      className="w-full py-1 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-600 dark:text-gray-300 text-[10px] font-bold rounded-xl transition-all"
-                    >
-                      تجاهل هذا الإصدار (v{updateState.latestVersion})
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* No updates / State is up-to-date card */
-                <div className="h-full p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-xl flex flex-col items-center justify-center text-center space-y-2">
-                  <div className="p-2 rounded-full bg-emerald-500/10 text-emerald-600">
-                    <Check className="w-5 h-5" />
-                  </div>
-                  <h4 className="text-xs font-extrabold text-emerald-800 dark:text-emerald-400">نظام الخزينة يعمل بأحدث إصدار محاسبي</h4>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-400 leading-relaxed max-w-xs">
-                    عمليات التدقيق والتحقق تفيد بأن نسختك مطابقة لآخر إصدار تم نشره على ملقمات صور المالية. لا يتطلب منك أي إجراء للترقية الآن.
-                  </p>
-                  
-                  {ignoredVersion && updateState && isVersionNewer(currentVersion, updateState.latestVersion) && (
-                    <div className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg mt-1 flex items-center gap-1">
-                      <span>لقد قمت بتجاهل الإصدار v{updateState.latestVersion}.</span>
-                      <button 
-                        onClick={() => {
-                          onResetIgnoreVersion();
-                          showToast('🔔 تم إلغاء تجاهل الإصدار الجديد');
-                        }}
-                        className="underline font-bold hover:text-amber-700 cursor-pointer"
-                      >
-                        إلغاء التجاهل
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
+
+              {/* Download Update button */}
+              {updateState && updateState.updateAvailable && isVersionNewer(currentVersion, updateState.latestVersion) && updateState.downloadUrl ? (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    disabled={isPreparingDownload}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (isPreparingDownload) return;
+                      setIsPreparingDownload(true);
+                      setTimeout(() => {
+                        window.open(updateState.downloadUrl, '_blank', 'noopener,noreferrer');
+                        setIsPreparingDownload(false);
+                      }, 1500);
+                    }}
+                    className="w-full py-2 bg-gradient-to-l from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 font-black text-white text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 text-center cursor-pointer disabled:opacity-75 disabled:cursor-wait"
+                  >
+                    <Download className={`w-3.5 h-3.5 ${isPreparingDownload ? 'animate-spin' : 'animate-bounce'}`} />
+                    {isPreparingDownload ? 'جاري توجيهك لصفحة تنزيل التحديث...' : 'تنزيل ملف التثبيت المحدث (Download Update)'}
+                  </button>
+                </div>
+              ) : null}
             </div>
 
           </div>

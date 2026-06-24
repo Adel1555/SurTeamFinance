@@ -21,6 +21,17 @@ function createWindow() {
     icon: path.join(__dirname, '../public/assets/logo.png')
   });
 
+  // Open external HTTP/HTTPS links in system default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http:') || url.startsWith('https:')) {
+      import('electron').then(({ shell }) => {
+        shell.openExternal(url);
+      });
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
   // Detect dev mode
   const isDev = !app.isPackaged || process.env.NODE_ENV === 'development';
 

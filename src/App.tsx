@@ -7,6 +7,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { DatabaseService } from './db';
 import { Voucher, VisualIdentity } from './types';
 import { formatOMR, isVersionNewer } from './utils';
+import packageJson from '../package.json';
 
 // Components imports styled perfectly
 import Clock from './components/Clock';
@@ -178,8 +179,8 @@ export default function App() {
   };
 
   // Windows Desktop Electron application update states & logic
-  const CURRENT_VERSION = '1.0.0';
-  const UPDATE_URL = "https://raw.githubusercontent.com/Adel1555/AlKhazinaNext-Beta/main/update.json";
+  const CURRENT_VERSION = packageJson.version || '1.0.0';
+  const UPDATE_URL = "https://raw.githubusercontent.com/Adel1555/SurTeamFinance/main/update.json";
 
   const [updateState, setUpdateState] = useState<{
     updateAvailable: boolean;
