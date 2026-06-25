@@ -6,16 +6,18 @@
 import { useState, useMemo } from 'react';
 import { Voucher, VisualIdentity, VoucherType } from '../types';
 import { formatDate, formatOMR } from '../utils';
-import { Search, Filter, Trash2, Printer, FileText, ArrowUpRight, ArrowDownRight, ArrowUpDown, RefreshCw, Calendar, ListFilter } from 'lucide-react';
+import { Search, Filter, Trash2, Printer, FileText, ArrowUpRight, ArrowDownRight, ArrowUpDown, RefreshCw, Calendar, ListFilter, Eye, Pencil } from 'lucide-react';
 
 interface ArchivePanelProps {
   vouchers: Voucher[];
   identity: VisualIdentity;
   onDeleteVoucher: (id: string) => void;
   onPrintVoucher: (voucher: Voucher) => void;
+  onViewVoucher: (voucher: Voucher) => void;
+  onEditVoucher: (voucher: Voucher) => void;
 }
 
-export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPrintVoucher }: ArchivePanelProps) {
+export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPrintVoucher, onViewVoucher, onEditVoucher }: ArchivePanelProps) {
   // Custom delete confirmation state (avoids iframe blocking dialogs)
   const [voucherToDelete, setVoucherToDelete] = useState<Voucher | null>(null);
 
@@ -480,6 +482,26 @@ export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPr
                     <td className="p-3.5 text-center pl-5">
                       <div className="flex items-center justify-center gap-2">
                         
+                        {/* View Voucher */}
+                        <button
+                          type="button"
+                          onClick={() => onViewVoucher(v)}
+                          title="عرض السند"
+                          className="text-gray-500 dark:text-gray-400 bg-slate-100 dark:bg-zinc-900 hover:opacity-85 p-1.5 rounded-lg transition-all border border-gray-200/40 dark:border-zinc-800"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Edit Voucher */}
+                        <button
+                          type="button"
+                          onClick={() => onEditVoucher(v)}
+                          title="تعديل السند"
+                          className="text-blue-600 dark:text-blue-400 bg-slate-100 dark:bg-zinc-900 hover:opacity-85 p-1.5 rounded-lg transition-all border border-gray-200/40 dark:border-zinc-800"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+
                         {/* Print preview / Edit */}
                         <button
                           type="button"

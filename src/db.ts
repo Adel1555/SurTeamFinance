@@ -95,7 +95,8 @@ export class DatabaseService {
     } catch (e) {
       console.error('Error loading database', e);
     }
-    return INITIAL_DB;
+    // Return a deep clone of INITIAL_DB to avoid in-memory reference pollution
+    return JSON.parse(JSON.stringify(INITIAL_DB));
   }
 
   private static saveDB(db: AppDatabase): void {

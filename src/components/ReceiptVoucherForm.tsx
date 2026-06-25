@@ -4,19 +4,21 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Voucher, VisualIdentity, VoucherType } from '../types';
+import { Voucher, VisualIdentity, VoucherType, AttachmentMetadata } from '../types';
 import { DatabaseService } from '../db';
 import { formatOMR, tafqeet } from '../utils';
 import { Calendar, User, DollarSign, CreditCard, AlignRight, FileText, CheckCircle, ChevronDown, Plus, Info } from 'lucide-react';
+import VoucherAttachments from './VoucherAttachments';
 
 interface ReceiptVoucherFormProps {
   identity: VisualIdentity;
   onSaved: () => void;
   onCancel: () => void;
   onPreviewVoucher: (voucher: Voucher) => void;
+  voucherToEdit?: Voucher;
 }
 
-export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPreviewVoucher }: ReceiptVoucherFormProps) {
+export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPreviewVoucher, voucherToEdit }: ReceiptVoucherFormProps) {
   // Pull drop options
   const [payers, setPayers] = useState<string[]>([]);
   const [methods, setMethods] = useState<string[]>([]);
@@ -31,6 +33,7 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
   const [method, setMethod] = useState('');
   const [description, setDescription] = useState('');
   const [notes, setNotes] = useState('');
+  const [attachments, setAttachments] = useState<AttachmentMetadata[]>([]);
 
   // Quick state
   const [errorMsg, setErrorMsg] = useState('');
@@ -42,35 +45,48 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
   const isDuplicate = React.useMemo(() => {
     if (!voucherNo.trim()) return false;
     return DatabaseService.getVouchers().some(
-      v => v.voucherNo.trim().toUpperCase() === voucherNo.trim().toUpperCase()
+      v => v.voucherNo.trim().toUpperCase() === voucherNo.trim().toUpperCase() && v.id !== voucherToEdit?.id
     );
-  }, [voucherNo]);
+  }, [voucherNo, voucherToEdit]);
+
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
   useEffect(() => {
     // Initial fetch from db
     setPayers(DatabaseService.getPayers());
     setMethods(DatabaseService.getPaymentMethods());
     
-    // Auto-generate voucher number
-    const nextNo = DatabaseService.getNextVoucherNo('receipt');
-    setVoucherNo(nextNo);
+    if (voucherToEdit) {
+      setVoucherNo(voucherToEdit.voucherNo);
+      setDate(voucherToEdit.date);
+      setAmount(voucherToEdit.amount);
+      setPayer(voucherToEdit.payerOrBeneficiary);
+      setMethod(voucherToEdit.paymentMethod);
+      setDescription(voucherToEdit.description);
+      setNotes(voucherToEdit.notes || '');
+      setAttachments(voucherToEdit.attachments || []);
+    } else {
+      // Auto-generate voucher number
+      const nextNo = DatabaseService.getNextVoucherNo('receipt');
+      setVoucherNo(nextNo);
 
-    // Default today date
-    const today = new Date().toISOString().split('T')[0];
-    setDate(today);
+      // Default today date
+      const today = new Date().toISOString().split('T')[0];
+      setDate(today);
 
-    // Default first payment method
-    const dbMethods = DatabaseService.getPaymentMethods();
-    if (dbMethods.length > 0) {
-      setMethod(dbMethods[0]);
+      // Default first payment method
+      const dbMethods = DatabaseService.getPaymentMethods();
+      if (dbMethods.length > 0) {
+        setMethod(dbMethods[0]);
+      }
+      
+      // Default payer
+      const dbPayers = DatabaseService.getPayers();
+      if (dbPayers.length > 0) {
+        setPayer(dbPayers[0]);
+      }
     }
-    
-    // Default payer
-    const dbPayers = DatabaseService.getPayers();
-    if (dbPayers.length > 0) {
-      setPayer(dbPayers[0]);
-    }
-  }, []);
+  }, [voucherToEdit]);
 
   const handleQuickAddPayer = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +98,45 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
       setPayer(name);
       setTempNewPayer('');
       setShowQuickAddPayer(false);
+    }
+  };
+
+  const executeSave = () => {
+    setShowSaveConfirm(false);
+    try {
+      if (voucherToEdit) {
+        DatabaseService.updateVoucher(voucherToEdit.id, {
+          voucherNo,
+          date,
+          amount: Number(amount),
+          payerOrBeneficiary: payer,
+          paymentMethod: method,
+          description,
+          notes,
+          attachments
+        });
+        setSuccessMsg('تم تحديث سند القبض بنجاح في قاعدة البيانات!');
+      } else {
+        const saved = DatabaseService.addVoucher({
+          voucherNo,
+          type: 'receipt',
+          date,
+          amount: Number(amount),
+          payerOrBeneficiary: payer,
+          paymentMethod: method,
+          description,
+          notes,
+          attachments
+        });
+        setSuccessMsg('تم حفظ سند القبض بنجاح في قاعدة البيانات!');
+      }
+
+      setTimeout(() => {
+        setSuccessMsg('');
+        onSaved();
+      }, 1500);
+    } catch (e) {
+      setErrorMsg('حدث خطأ أثناء محاولة حفظ السند مالي');
     }
   };
 
@@ -114,26 +169,12 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
       return;
     }
 
-    try {
-      const saved = DatabaseService.addVoucher({
-        voucherNo,
-        type: 'receipt',
-        date,
-        amount: Number(amount),
-        payerOrBeneficiary: payer,
-        paymentMethod: method,
-        description,
-        notes
-      });
-
-      setSuccessMsg('تم حفظ سند القبض بنجاح في قاعدة البيانات!');
-      setTimeout(() => {
-        setSuccessMsg('');
-        onSaved();
-      }, 1500);
-    } catch (e) {
-      setErrorMsg('حدث خطأ أثناء محاولة حفظ السند مالي');
+    if (voucherToEdit && !showSaveConfirm) {
+      setShowSaveConfirm(true);
+      return;
     }
+
+    executeSave();
   };
 
   const handleExportPDFPreview = () => {
@@ -144,7 +185,7 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
 
     // Build temporary voucher mock to preview inside print layout
     const mockVoucher: Voucher = {
-      id: 'preview_id',
+      id: voucherToEdit ? voucherToEdit.id : 'preview_id',
       voucherNo,
       type: 'receipt',
       date,
@@ -153,7 +194,8 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
       paymentMethod: method,
       description,
       notes,
-      createdAt: Date.now()
+      createdAt: voucherToEdit ? voucherToEdit.createdAt : Date.now(),
+      attachments
     };
 
     onPreviewVoucher(mockVoucher);
@@ -175,13 +217,16 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
       <div className="border-b border-gray-100 dark:border-zinc-800 pb-4 flex justify-between items-center flex-row-reverse">
         <div className="flex items-center gap-2 flex-row-reverse text-right">
           <span className="w-3.5 h-3.5 rounded-full inline-block bg-emerald-500" />
-          <h2 className="text-lg font-black text-gray-900 dark:text-white">إصدار {identity.receiptTerm} جديدة</h2>
+          <h2 className="text-lg font-black text-gray-900 dark:text-white">
+            {voucherToEdit ? `تعديل ${identity.receiptTerm}` : `إصدار ${identity.receiptTerm} جديدة`}
+          </h2>
         </div>
         <div className="flex items-center gap-2 flex-row-reverse text-xs text-gray-500">
           <span className="opacity-60 shrink-0">:رقم السند المرجعي</span>
           <input
             type="text"
             required
+            disabled={!!voucherToEdit}
             placeholder="مثال: RV-1001"
             value={voucherNo}
             onChange={(e) => setVoucherNo(e.target.value)}
@@ -189,7 +234,7 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
               identity.alertOnDuplicateVoucherNo && isDuplicate 
                 ? 'border-rose-400 text-rose-600 focus:ring-rose-500/30' 
                 : 'border-blue-200/50 dark:border-blue-800/20 text-gray-800 dark:text-gray-200 focus:ring-emerald-500/30'
-            } focus:outline-none focus:ring-2`}
+            } disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2`}
           />
         </div>
       </div>
@@ -371,6 +416,13 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
           />
         </div>
 
+        {/* Voucher Document Attachments */}
+        <VoucherAttachments
+          attachments={attachments}
+          onChange={setAttachments}
+          identity={identity}
+        />
+
         {/* Custom Visual Help tips */}
         {identity.showHelpTips && (
           <div className="p-3 bg-amber-50/20 border border-amber-100/40 rounded-xl text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed text-right flex items-start gap-2 flex-row-reverse">
@@ -414,6 +466,37 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
           </button>
         </div>
       </form>
+
+      {/* Save Confirmation Modal */}
+      {showSaveConfirm && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" dir="rtl">
+          <div className="bg-white dark:bg-zinc-950 rounded-2xl max-w-md w-full border border-gray-200 dark:border-zinc-800 shadow-2xl overflow-hidden text-right p-6 space-y-4">
+            <h3 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2 flex-row-reverse">
+              ⚠️ تأكيد تعديل السند المالي
+            </h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              هل تريد حفظ التعديلات على هذا السند؟
+            </p>
+            <div className="flex gap-3 justify-end flex-row-reverse pt-2">
+              <button
+                type="button"
+                onClick={executeSave}
+                style={{ backgroundColor: identity.primaryColor }}
+                className={`px-4 py-2 text-xs font-bold text-white hover:opacity-90 transition-all ${btnRadius}`}
+              >
+                نعم، حفظ التعديلات
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSaveConfirm(false)}
+                className={`px-4 py-2 text-xs font-semibold bg-gray-100 dark:bg-zinc-900 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-800 transition-all ${btnRadius}`}
+              >
+                تراجع
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

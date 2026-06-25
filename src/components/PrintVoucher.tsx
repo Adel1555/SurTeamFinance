@@ -260,6 +260,18 @@ export default function PrintVoucher({ voucher, identity, onClose }: PrintVouche
                   </span>
                 </div>
               )}
+
+              {/* Attachments Info */}
+              {voucher.attachments && voucher.attachments.length > 0 && (
+                <div className="border-b pb-3 flex items-start gap-3 print-attachment-info">
+                  <span className="font-extrabold text-xs min-w-[150px] text-zinc-500 text-right">
+                    المرفقات الثبوتية:
+                  </span>
+                  <span className="text-xs text-zinc-800 font-bold flex-1 text-right">
+                    عدد المرفقات: {voucher.attachments.length}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Terms and conditions subtext */}

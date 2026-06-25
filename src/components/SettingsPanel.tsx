@@ -8,6 +8,7 @@ import { DatabaseService } from '../db';
 import { VisualIdentity, YearlyArchive, Voucher, AppDatabase } from '../types';
 import { formatOMR, formatDate } from '../utils';
 import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen } from 'lucide-react';
+import { AttachmentStorageService } from './AttachmentStorageService';
 
 interface SettingsPanelProps {
   onDatabaseReseted: () => void;
@@ -259,7 +260,7 @@ export default function SettingsPanel({
   };
 
   // Export any given AppDatabase as a file
-  const downloadBackupFile = (data: AppDatabase, filename: string) => {
+  const downloadBackupFile = (data: any, filename: string) => {
     const stringified = JSON.stringify(data, null, 2);
     const blob = new Blob([stringified], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -273,9 +274,12 @@ export default function SettingsPanel({
   };
 
   // Export Full JSON database to Client's computer file
-  const handleBackupExport = () => {
+  const handleBackupExport = async () => {
     try {
-      const db = DatabaseService.getDatabase();
+      const db = DatabaseService.getDatabase() as any;
+      const media = await AttachmentStorageService.exportAll();
+      db.attachments_media_folder = media;
+      
       const filename = `SurVolunteer_Backup_${formatDateForFilename(new Date())}.json`;
       downloadBackupFile(db, filename);
       showToast('💾 تم تصدير نسخة احتياطية خارجية بنجاح!');
@@ -338,13 +342,20 @@ export default function SettingsPanel({
     e.target.value = '';
   };
 
-  const confirmBackupRestore = () => {
+  const confirmBackupRestore = async () => {
     if (!pendingBackupJson) return;
     if (typedConfirmImport.trim() !== 'IMPORT') {
       showToast('⚠️ يرجى كتابة كلمة IMPORT بدقة للتأكيد');
       return;
     }
     try {
+      const parsed = JSON.parse(pendingBackupJson);
+      
+      // Import attachments first if they exist in the file!
+      if (parsed.attachments_media_folder) {
+        await AttachmentStorageService.importAll(parsed.attachments_media_folder);
+      }
+
       const result = DatabaseService.importDatabase(pendingBackupJson, true);
       if (result.success) {
         setPayers(DatabaseService.getPayers());
@@ -364,7 +375,8 @@ export default function SettingsPanel({
   };
 
   // Reset core database to default (Hard reset)
-  const handleHardReset = () => {
+  const handleHardReset = async () => {
+    await AttachmentStorageService.clearAll();
     DatabaseService.resetDatabase();
     setPayers(DatabaseService.getPayers());
     setMethods(DatabaseService.getPaymentMethods());

@@ -8,6 +8,7 @@ import { DatabaseService } from './db';
 import { Voucher, VisualIdentity } from './types';
 import { formatOMR, isVersionNewer } from './utils';
 import packageJson from '../package.json';
+import { AttachmentStorageService } from './components/AttachmentStorageService';
 
 // Components imports styled perfectly
 import Clock from './components/Clock';
@@ -19,6 +20,7 @@ import ArchivePanel from './components/ArchivePanel';
 import DashboardRecords from './components/DashboardRecords';
 import VisualIdentityPanel from './components/VisualIdentityPanel';
 import PrintVoucher from './components/PrintVoucher';
+import VoucherDetailsModal from './components/VoucherDetailsModal';
 import Logo from './components/Logo';
 
 // Icons
@@ -38,14 +40,22 @@ import {
   Compass, 
   Settings2,
   Lock,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 
 type TabType = 'dashboard' | 'receipt' | 'payment' | 'archive' | 'reports' | 'visual' | 'settings';
 
 export default function App() {
   // Sync DB variables
-  const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [vouchers, setVouchers] = useState<Voucher[]>(() => {
+    try {
+      return DatabaseService.getVouchers();
+    } catch (e) {
+      console.error('Error loading initial vouchers', e);
+      return [];
+    }
+  });
   const [identity, setIdentity] = useState<VisualIdentity>(() => DatabaseService.getVisualIdentity());
 
   // Navigation state
@@ -56,6 +66,20 @@ export default function App() {
 
   // Print portal selector overlay
   const [printTargetVoucher, setPrintTargetVoucher] = useState<Voucher | null>(null);
+
+  // View details modal selector overlay
+  const [viewTargetVoucher, setViewTargetVoucher] = useState<Voucher | null>(null);
+
+  // Voucher edit selector
+  const [voucherToEdit, setVoucherToEdit] = useState<Voucher | null>(null);
+
+  const handleEditVoucher = (voucher: Voucher) => {
+    setVoucherToEdit(voucher);
+    setActiveTab(voucher.type === 'receipt' ? 'receipt' : 'payment');
+  };
+
+  // Pending delete voucher state (with attachments check)
+  const [pendingDeleteVoucher, setPendingDeleteVoucher] = useState<Voucher | null>(null);
 
   // Dark / Light Toggle state - Persistence included
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -174,7 +198,39 @@ export default function App() {
   };
 
   const handleDeleteVoucher = (id: string) => {
-    DatabaseService.deleteVoucher(id);
+    const voucher = DatabaseService.getVouchers().find(v => v.id === id);
+    if (voucher && voucher.attachments && voucher.attachments.length > 0) {
+      setPendingDeleteVoucher(voucher);
+    } else {
+      DatabaseService.deleteVoucher(id);
+      handleManualRefresh();
+    }
+  };
+
+  const handleConfirmDeleteWithAttachments = async () => {
+    if (!pendingDeleteVoucher) return;
+    
+    // Delete all attachments from IndexedDB
+    if (pendingDeleteVoucher.attachments) {
+      for (const att of pendingDeleteVoucher.attachments) {
+        try {
+          await AttachmentStorageService.deleteAttachment(att.id);
+        } catch (e) {
+          console.error(`Failed to delete attachment: ${att.id}`, e);
+        }
+      }
+    }
+
+    DatabaseService.deleteVoucher(pendingDeleteVoucher.id);
+    setPendingDeleteVoucher(null);
+    handleManualRefresh();
+  };
+
+  const handleConfirmDeleteOnly = () => {
+    if (!pendingDeleteVoucher) return;
+    
+    DatabaseService.deleteVoucher(pendingDeleteVoucher.id);
+    setPendingDeleteVoucher(null);
     handleManualRefresh();
   };
 
@@ -593,7 +649,10 @@ export default function App() {
 
               {/* Tab 2: New Receipt */}
               <button
-                onClick={() => setActiveTab('receipt')}
+                onClick={() => {
+                  setVoucherToEdit(null);
+                  setActiveTab('receipt');
+                }}
                 className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
                   activeTab === 'receipt' 
                     ? 'shadow-md font-extrabold' 
@@ -616,7 +675,10 @@ export default function App() {
 
               {/* Tab 3: New Payment */}
               <button
-                onClick={() => setActiveTab('payment')}
+                onClick={() => {
+                  setVoucherToEdit(null);
+                  setActiveTab('payment');
+                }}
                 className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
                   activeTab === 'payment' 
                     ? 'shadow-md font-extrabold' 
@@ -855,6 +917,8 @@ export default function App() {
                 identity={identity}
                 onDeleteVoucher={handleDeleteVoucher}
                 onPrintVoucher={(v) => setPrintTargetVoucher(v)}
+                onViewVoucher={(v) => setViewTargetVoucher(v)}
+                onEditVoucher={handleEditVoucher}
               />
 
               {/* Help tip helper */}
@@ -884,11 +948,16 @@ export default function App() {
             <div className="animate-fade-in print:hidden">
               <ReceiptVoucherForm
                 identity={identity}
+                voucherToEdit={voucherToEdit || undefined}
                 onSaved={() => {
                   handleManualRefresh();
+                  setVoucherToEdit(null);
                   setActiveTab('dashboard');
                 }}
-                onCancel={() => setActiveTab('dashboard')}
+                onCancel={() => {
+                  setVoucherToEdit(null);
+                  setActiveTab('dashboard');
+                }}
                 onPreviewVoucher={(v) => setPrintTargetVoucher(v)}
               />
             </div>
@@ -898,11 +967,16 @@ export default function App() {
             <div className="animate-fade-in print:hidden">
               <PaymentVoucherForm
                 identity={identity}
+                voucherToEdit={voucherToEdit || undefined}
                 onSaved={() => {
                   handleManualRefresh();
+                  setVoucherToEdit(null);
                   setActiveTab('dashboard');
                 }}
-                onCancel={() => setActiveTab('dashboard')}
+                onCancel={() => {
+                  setVoucherToEdit(null);
+                  setActiveTab('dashboard');
+                }}
                 onPreviewVoucher={(v) => setPrintTargetVoucher(v)}
               />
             </div>
@@ -915,6 +989,8 @@ export default function App() {
                 identity={identity}
                 onDeleteVoucher={handleDeleteVoucher}
                 onPrintVoucher={(v) => setPrintTargetVoucher(v)}
+                onViewVoucher={(v) => setViewTargetVoucher(v)}
+                onEditVoucher={handleEditVoucher}
               />
             </div>
           )}
@@ -967,6 +1043,64 @@ export default function App() {
           identity={identity}
           onClose={() => setPrintTargetVoucher(null)}
         />
+      )}
+
+      {/* Floating View Details Modal portal */}
+      {viewTargetVoucher && (
+        <VoucherDetailsModal
+          voucher={viewTargetVoucher}
+          identity={identity}
+          onClose={() => setViewTargetVoucher(null)}
+          onPrint={(v) => setPrintTargetVoucher(v)}
+          onEdit={handleEditVoucher}
+        />
+      )}
+
+      {/* Attachments Deletion Confirmation Dialog */}
+      {pendingDeleteVoucher && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in print:hidden" dir="rtl">
+          <div className="bg-white dark:bg-[#0c203b] border border-blue-100 dark:border-blue-900/40 rounded-2xl max-w-md w-full p-6 text-right shadow-2xl space-y-5">
+            <div className="flex items-start gap-3 flex-row-reverse">
+              <div className="p-3 bg-rose-500/10 text-rose-600 rounded-xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-gray-900 dark:text-white">
+                  حذف السند والمرفقات المصاحبة
+                </h3>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                  يحتوي السند <span className="font-bold">({pendingDeleteVoucher.voucherNo})</span> على عدد <span className="font-bold">({pendingDeleteVoucher.attachments?.length})</span> من المرفقات والملفات الثبوتية المخزنة. كيف ترغب في إتمام عملية الحذف؟
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleConfirmDeleteWithAttachments}
+                className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-sm transition-all cursor-pointer text-center"
+              >
+                🗑️ حذف السند والملفات المرفقة معاً (نهائياً)
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmDeleteOnly}
+                className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black shadow-sm transition-all cursor-pointer text-center"
+              >
+                📄 حذف السند المالي فقط (والاحتفاظ بالملفات في الخزانة)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPendingDeleteVoucher(null)}
+                className="w-full py-2.5 px-4 bg-gray-100 dark:bg-zinc-850 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+              >
+                إلغاء العملية والتراجع
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

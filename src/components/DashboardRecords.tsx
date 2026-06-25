@@ -6,16 +6,18 @@
 import { useState } from 'react';
 import { Voucher, VisualIdentity } from '../types';
 import { formatOMR, formatDate } from '../utils';
-import { Printer, Trash2, FileText, ArrowUpRight, ArrowDownRight, Layers, HelpCircle, Check, X } from 'lucide-react';
+import { Printer, Trash2, FileText, ArrowUpRight, ArrowDownRight, Layers, HelpCircle, Check, X, Eye, Pencil } from 'lucide-react';
 
 interface DashboardRecordsProps {
   vouchers: Voucher[];
   identity: VisualIdentity;
   onDeleteVoucher: (id: string) => void;
   onPrintVoucher: (voucher: Voucher) => void;
+  onViewVoucher: (voucher: Voucher) => void;
+  onEditVoucher: (voucher: Voucher) => void;
 }
 
-export default function DashboardRecords({ vouchers, identity, onDeleteVoucher, onPrintVoucher }: DashboardRecordsProps) {
+export default function DashboardRecords({ vouchers, identity, onDeleteVoucher, onPrintVoucher, onViewVoucher, onEditVoucher }: DashboardRecordsProps) {
   const [filterType, setFilterType] = useState<'all' | 'receipt' | 'payment'>('all');
   
   // Track id being deleted to show beautiful inline prompt "هل أنت متأكد من حذف هذا السند؟ نعم/لا"
@@ -134,8 +136,26 @@ export default function DashboardRecords({ vouchers, identity, onDeleteVoucher, 
                   </div>
                 )}
 
-                {/* Left Side: Three action icons (Exact requirement: Print, Delete, Convert PDF) */}
+                {/* Left Side: Four action icons (Exact requirement: View, Print, Delete, Convert PDF) */}
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Icon 4: View/Open Voucher */}
+                  <button
+                    onClick={() => onViewVoucher(v)}
+                    title="عرض السند"
+                    className="p-2 rounded-lg bg-gray-150/70 dark:bg-zinc-900 text-gray-500 hover:text-[var(--primary-color)] hover:bg-[var(--primary-color-alpha)] transition-all hover:scale-105 cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Edit Voucher */}
+                  <button
+                    onClick={() => onEditVoucher(v)}
+                    title="تعديل السند"
+                    className="p-2 rounded-lg bg-gray-150/70 dark:bg-zinc-900 text-gray-500 hover:text-blue-600 hover:bg-blue-100/30 transition-all hover:scale-105 cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+
                   {/* Icon 3: Convert/Export to PDF */}
                   <button
                     onClick={() => onPrintVoucher(v)}

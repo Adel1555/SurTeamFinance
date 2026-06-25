@@ -5,6 +5,13 @@
 
 export type VoucherType = 'receipt' | 'payment';
 
+export interface AttachmentMetadata {
+  id: string;      // Unique file ID / path reference, e.g. "att_123"
+  name: string;    // Original file name
+  size: number;    // File size in bytes
+  type: string;    // MIME type (image/jpeg, image/png, application/pdf)
+}
+
 export interface Voucher {
   id: string;
   voucherNo: string; // e.g., REC-001 or PAY-001
@@ -16,6 +23,7 @@ export interface Voucher {
   description: string;
   notes: string;
   createdAt: number;
+  attachments?: AttachmentMetadata[];
 }
 
 export type ButtonStyle = 'rounded' | 'sharp' | 'pill';
