@@ -1,5 +1,6 @@
 import React from 'react';
-import logoUrl from '../../public/assets/logo.png';
+
+const logoUrl = '/assets/logo.png';
 
 interface LogoProps {
   className?: string;
