@@ -18,16 +18,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
 
       - name: Install Dependencies
         run: npm install
 
-      - name: Generate Windows Icons from Logo
-        run: npx tsx build-assets.js
-
-      - name: Build React and Package Electron Windows Installer
+      - name: Build Windows Installer
         run: npm run dist
 
       - name: Upload Windows Installer Setup Artifact
