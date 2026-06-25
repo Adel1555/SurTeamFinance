@@ -24,6 +24,9 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      - name: Generate Windows Icons from Logo
+        run: npx tsx build-assets.js
+
       - name: Build React and Package Electron Windows Installer
         run: npm run dist
 
