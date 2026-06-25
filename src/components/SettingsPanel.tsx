@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { DatabaseService } from '../db';
 import { VisualIdentity, YearlyArchive, Voucher, AppDatabase } from '../types';
 import { formatOMR, formatDate } from '../utils';
-import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen } from 'lucide-react';
+import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle } from 'lucide-react';
 import { AttachmentStorageService } from './AttachmentStorageService';
 
 interface SettingsPanelProps {
@@ -67,6 +67,8 @@ export default function SettingsPanel({
   // Download Progress and History Modal states
   const [isPreparingDownload, setIsPreparingDownload] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [hasManuallyChecked, setHasManuallyChecked] = useState(false);
+  const [justDownloadedVersion, setJustDownloadedVersion] = useState<string | null>(null);
 
   // Warnings / Confirms
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -89,6 +91,23 @@ export default function SettingsPanel({
   const [typedConfirmRestore, setTypedConfirmRestore] = useState('');
   const [restoreErrorMsg, setRestoreErrorMsg] = useState('');
   const [typedConfirmImport, setTypedConfirmImport] = useState('');
+
+  const showDownloadButton = 
+    hasManuallyChecked && 
+    !isCheckingUpdates && 
+    !updateError && 
+    updateState !== null && 
+    updateState.updateAvailable && 
+    isVersionNewer(currentVersion, updateState.latestVersion) && 
+    !!updateState.downloadUrl &&
+    localStorage.getItem('sur_finance_downloaded_update_version') !== updateState.latestVersion &&
+    justDownloadedVersion !== updateState.latestVersion;
+
+  const showDownloadedMessage = 
+    updateState !== null && 
+    updateState.updateAvailable && 
+    isVersionNewer(currentVersion, updateState.latestVersion) && 
+    (localStorage.getItem('sur_finance_downloaded_update_version') === updateState.latestVersion || justDownloadedVersion === updateState.latestVersion);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -501,7 +520,11 @@ export default function SettingsPanel({
                 <button
                   type="button"
                   disabled={isCheckingUpdates}
-                  onClick={() => onCheckUpdates()}
+                  onClick={async () => {
+                    setJustDownloadedVersion(null);
+                    await onCheckUpdates();
+                    setHasManuallyChecked(true);
+                  }}
                   className={`w-full py-2 px-4 text-xs font-black text-white hover:opacity-95 transition-all flex items-center justify-center gap-2 cursor-pointer ${btnRadius}`}
                   style={{ backgroundColor: identity.primaryColor }}
                 >
@@ -529,6 +552,11 @@ export default function SettingsPanel({
                     <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-250">جاري فحص الإصدار من السيرفر...</span>
                   </div>
+                ) : !hasManuallyChecked ? (
+                  <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-xl flex items-center gap-2 text-blue-600">
+                    <HelpCircle className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs font-bold text-blue-700 dark:text-blue-400">اضغط على زر التحقق أعلاه لفحص التحديثات المتاحة.</span>
+                  </div>
                 ) : updateError && !updateState ? (
                   <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-xl flex items-center gap-2 text-red-500">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -548,7 +576,7 @@ export default function SettingsPanel({
               </div>
 
               {/* Release Notes Segment */}
-              {updateState && updateState.updateAvailable && isVersionNewer(currentVersion, updateState.latestVersion) && updateState.releaseNotes && (
+              {hasManuallyChecked && !isCheckingUpdates && !updateError && updateState && updateState.updateAvailable && isVersionNewer(currentVersion, updateState.latestVersion) && updateState.releaseNotes && (
                 <div className="space-y-1">
                   <span className="text-xs font-bold text-gray-500 block">ملاحظات الإصدار (Release Notes):</span>
                   <p className="text-[10.5px] leading-relaxed text-gray-600 dark:text-gray-300 font-sans max-h-24 overflow-y-auto bg-white/45 dark:bg-zinc-950/45 p-2.5 rounded-lg border border-gray-150/40 dark:border-zinc-800/40 scrollbar-thin">
@@ -558,7 +586,7 @@ export default function SettingsPanel({
               )}
 
               {/* Download Update button */}
-              {updateState && updateState.updateAvailable && isVersionNewer(currentVersion, updateState.latestVersion) && updateState.downloadUrl ? (
+              {showDownloadButton ? (
                 <div className="pt-2">
                   <button
                     type="button"
@@ -568,8 +596,10 @@ export default function SettingsPanel({
                       if (isPreparingDownload) return;
                       setIsPreparingDownload(true);
                       setTimeout(() => {
-                        window.open(updateState.downloadUrl, '_blank', 'noopener,noreferrer');
+                        window.open(updateState!.downloadUrl, '_blank', 'noopener,noreferrer');
                         setIsPreparingDownload(false);
+                        localStorage.setItem('sur_finance_downloaded_update_version', updateState!.latestVersion);
+                        setJustDownloadedVersion(updateState!.latestVersion);
                       }, 1500);
                     }}
                     className="w-full py-2 bg-gradient-to-l from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 font-black text-white text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 text-center cursor-pointer disabled:opacity-75 disabled:cursor-wait"
@@ -577,6 +607,15 @@ export default function SettingsPanel({
                     <Download className={`w-3.5 h-3.5 ${isPreparingDownload ? 'animate-spin' : 'animate-bounce'}`} />
                     {isPreparingDownload ? 'جاري توجيهك لصفحة تنزيل التحديث...' : 'تنزيل ملف التثبيت المحدث (Download Update)'}
                   </button>
+                </div>
+              ) : showDownloadedMessage ? (
+                <div className="pt-2">
+                  <div className="p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-xl flex items-center gap-2 text-emerald-600" dir="rtl">
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-400">
+                      تم فتح رابط التحديث. لن يظهر زر التنزيل مرة أخرى لهذا الإصدار.
+                    </span>
+                  </div>
                 </div>
               ) : null}
             </div>
