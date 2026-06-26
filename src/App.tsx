@@ -236,7 +236,7 @@ export default function App() {
 
   // Windows Desktop Electron application update states & logic
   const CURRENT_VERSION = packageJson.version || '1.0.0';
-  const UPDATE_URL = "https://raw.githubusercontent.com/Adel1555/SurTeamFinance/main/update.json";
+  const UPDATE_URL = "https://raw.githubusercontent.com/Adel1555/SurTeamFinance-Updates/main/update.json";
 
   const [updateState, setUpdateState] = useState<{
     updateAvailable: boolean;

@@ -7,6 +7,7 @@ import { useState, useMemo } from 'react';
 import { Voucher, VisualIdentity, VoucherType } from '../types';
 import { formatDate, formatOMR } from '../utils';
 import { Search, Filter, Trash2, Printer, FileText, ArrowUpRight, ArrowDownRight, ArrowUpDown, RefreshCw, Calendar, ListFilter, Eye, Pencil } from 'lucide-react';
+import PrintFilteredVouchers from './PrintFilteredVouchers';
 
 interface ArchivePanelProps {
   vouchers: Voucher[];
@@ -20,6 +21,9 @@ interface ArchivePanelProps {
 export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPrintVoucher, onViewVoucher, onEditVoucher }: ArchivePanelProps) {
   // Custom delete confirmation state (avoids iframe blocking dialogs)
   const [voucherToDelete, setVoucherToDelete] = useState<Voucher | null>(null);
+  
+  // Custom state for showing the print report
+  const [showPrintReport, setShowPrintReport] = useState(false);
 
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
@@ -352,6 +356,47 @@ export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPr
           </button>
 
         </div>
+
+        {/* Row 4: Filtered Export/Print Actions */}
+        <div className="pt-3.5 border-t border-gray-100 dark:border-blue-900/20 flex flex-col sm:flex-row justify-between items-center gap-3">
+          {filteredVouchers.length === 0 ? (
+            methodFilter !== 'all' ? (
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-bold w-full text-right flex items-center gap-1.5 flex-row-reverse">
+                <span>⚠️ لا توجد سجلات مطابقة لطريقة الدفع المحددة.</span>
+              </p>
+            ) : null
+          ) : (
+            <>
+              <div className="text-right flex items-center gap-2 flex-row-reverse">
+                <span className="text-[10px] text-gray-400 font-bold shrink-0">إجراءات التقرير المصفى:</span>
+                <span className="text-[11px] text-zinc-550 dark:text-zinc-400">
+                  {methodFilter === 'all' 
+                    ? 'طباعة أو تصدير كل السجلات المعروضة حالياً بالبحث' 
+                    : `طباعة أو تصدير السندات الخاصة بـ (${methodFilter}) فقط`}
+                </span>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowPrintReport(true)}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <Printer className="w-4 h-4" />
+                  {methodFilter === 'all' ? 'طباعة كل السجلات المعروضة' : `طباعة النتائج المفلترة (${methodFilter})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPrintReport(true)}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <FileText className="w-4 h-4" />
+                  {methodFilter === 'all' ? 'تصدير كل السجلات المعروضة PDF' : `تصدير النتائج المفلترة PDF (${methodFilter})`}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
       </div>
 
       {/* Active filters status badge block */}
@@ -580,6 +625,15 @@ export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPr
             </div>
           </div>
         </div>
+      )}
+
+      {showPrintReport && (
+        <PrintFilteredVouchers
+          vouchers={filteredVouchers}
+          selectedMethod={methodFilter}
+          identity={identity}
+          onClose={() => setShowPrintReport(false)}
+        />
       )}
 
     </div>
