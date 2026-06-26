@@ -162,7 +162,7 @@ export default function PrintVoucher({ voucher, identity, onClose }: PrintVouche
 
               {/* Center - Visual Accent Emblem */}
               <div className="flex flex-col items-center justify-center select-none text-center">
-                <Logo size={60} showText={false} className="mx-auto" />
+                <Logo size={60} showText={false} className="mx-auto" customLogo={identity.customLogo} />
                 <p className="text-[7px] text-zinc-400 mt-1 font-mono tracking-widest uppercase">SUR VOLUNTEER</p>
               </div>
 

@@ -42,6 +42,7 @@ export interface VisualIdentity {
   showHelpTips: boolean;
   termsAndConditions: string;
   logoText: string;
+  customLogo?: string;
   alertOnDuplicateVoucherNo?: boolean;
 
   // Modern Theme Central Properties

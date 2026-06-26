@@ -596,7 +596,7 @@ export default function App() {
             </div>
 
             {/* The brand new official Omani Team logo */}
-            <Logo size={42} showText={false} className="hover:scale-110 transition-transform duration-300" />
+            <Logo size={42} showText={false} className="hover:scale-110 transition-transform duration-300" customLogo={identity.customLogo} />
           </div>
 
         </div>
@@ -612,7 +612,7 @@ export default function App() {
             
             {/* Elegant Official Logo Header at the top of the Sidebar */}
             <div className="flex flex-col items-center justify-center p-3.5 bg-gray-50/50 dark:bg-zinc-900/40 rounded-2xl border border-gray-100/70 dark:border-zinc-800/30 mb-2">
-              <Logo size={68} showText={true} />
+              <Logo size={68} showText={true} customLogo={identity.customLogo} />
             </div>
 
             {/* Nav Header Title */}
@@ -838,14 +838,14 @@ export default function App() {
                   <div className="p-2 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 mb-2">
                     <TrendingUp className="w-5 h-5 text-emerald-500 animate-pulse" />
                   </div>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans">
+                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#035bf4' }}>
                     إجمالي مبالغ القبض
                   </span>
-                  <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none">
+                  <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ borderColor: '#26c831', color: '#070ff1' }}>
                     {formatOMR(statistics.totalReceipts)}
                   </p>
-                  <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2">
-                    العدد: <strong className="text-emerald-500 font-mono">{statistics.receiptsCount}</strong> سندات
+                  <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2" style={{ color: '#38ec08' }}>
+                    العدد: <strong className="text-emerald-500 font-mono" style={{ color: 'inherit' }}>{statistics.receiptsCount}</strong> سندات
                   </span>
                 </div>
 
@@ -858,14 +858,14 @@ export default function App() {
                   <div className="p-2 rounded-full bg-rose-500/10 dark:bg-rose-500/20 mb-2">
                     <TrendingDown className="w-5 h-5 text-rose-500 animate-pulse" />
                   </div>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans">
+                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#b74040' }}>
                     إجمالي مبالغ الصرف
                   </span>
-                  <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none">
+                  <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ color: '#f50c0c' }}>
                     {formatOMR(statistics.totalPayments)}
                   </p>
-                  <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2">
-                    العدد: <strong className="text-rose-500 font-mono">{statistics.paymentsCount}</strong> سندات
+                  <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2" style={{ color: '#2aef0a' }}>
+                    العدد: <strong className="text-rose-500 font-mono" style={{ color: 'inherit' }}>{statistics.paymentsCount}</strong> سندات
                   </span>
                 </div>
 
@@ -878,7 +878,7 @@ export default function App() {
                   <div className="p-2 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 mb-2">
                     <Coins className="w-5 h-5 text-indigo-500 animate-bounce" />
                   </div>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans">
+                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#01173e' }}>
                     إجمالي السندات
                   </span>
                   <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ color: '#deee0d' }}>

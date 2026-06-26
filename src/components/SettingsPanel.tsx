@@ -9,6 +9,7 @@ import { VisualIdentity, YearlyArchive, Voucher, AppDatabase } from '../types';
 import { formatOMR, formatDate } from '../utils';
 import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle } from 'lucide-react';
 import { AttachmentStorageService } from './AttachmentStorageService';
+import Logo from './Logo';
 
 interface SettingsPanelProps {
   onDatabaseReseted: () => void;
@@ -112,6 +113,68 @@ export default function SettingsPanel({
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(''), 2500);
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate type
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+    if (!validTypes.includes(file.type)) {
+      showToast('⚠️ يرجى اختيار ملف صورة صالح بصيغة PNG أو JPG أو JPEG.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 250; // a logo is tiny, 250px is plenty and highly efficient
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          try {
+            const resizedBase64 = canvas.toDataURL('image/png');
+            const updated = { ...identity, customLogo: resizedBase64 };
+            DatabaseService.saveVisualIdentity(updated);
+            onIdentityUpdate(updated);
+            showToast('🎨 تم رفع الشعار المخصص وحفظه بنجاح!');
+          } catch (err) {
+            console.error('Error processing logo image', err);
+            showToast('⚠️ خطأ أثناء معالجة وحفظ الصورة.');
+          }
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleLogoRemove = () => {
+    const updated = { ...identity };
+    delete updated.customLogo; // remove the property completely
+    DatabaseService.saveVisualIdentity(updated);
+    onIdentityUpdate(updated);
+    showToast('✨ تم إزالة الشعار المخصص والعودة للشعار الافتراضي.');
   };
 
   const handleArchiveFiscalYear = () => {
@@ -645,6 +708,57 @@ export default function SettingsPanel({
             >
               <span className="w-5 h-5 rounded-full bg-white shadow-md transform transition-all duration-300 block" />
             </button>
+          </div>
+        </div>
+
+        {/* Manage Logo (Visual Identity) segment */}
+        <div className={`lg:col-span-12 p-5 ${cardStyleClass} space-y-4`} id="logo-branding-section">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1.5 border-b border-blue-50/10 dark:border-blue-900/15 pb-2 flex-row-reverse">
+            <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+            الهوية البصرية وشعار المؤسسة
+          </h3>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-4 rounded-xl bg-blue-50/10 dark:bg-[#001733]/10 border border-blue-100/30 dark:border-blue-900/10 hover:border-blue-200/40 dark:hover:border-blue-800/15 transition-all duration-300">
+            <div className="text-right space-y-1.5 flex-1">
+              <h4 className="text-xs font-black text-gray-850 dark:text-gray-150">شعار البرنامج المالي المخصص</h4>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed font-sans">
+                يمكنك رفع شعار مخصص بصيغة (PNG أو JPG أو JPEG). سيتم تلقائياً تكييف أبعاد الشعار وضغطه ليلائم جميع أجزاء واجهة البرنامج والتقارير المطبوعة وسندات القبض والصرف، وسيحفظ تلقائياً في النسخ الاحتياطية.
+              </p>
+              
+              <div className="flex gap-2.5 pt-2 flex-wrap">
+                <label
+                  htmlFor="logo-file-input"
+                  className={`py-2 px-4 text-xs font-extrabold text-white hover:opacity-90 transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${btnRadius}`}
+                  style={{ backgroundColor: identity.primaryColor }}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  اختيار شعار...
+                </label>
+                <input
+                  id="logo-file-input"
+                  type="file"
+                  accept="image/png, image/jpeg, image/jpg"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+
+                {identity.customLogo && (
+                  <button
+                    type="button"
+                    onClick={handleLogoRemove}
+                    className={`py-2 px-4 text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/20 dark:hover:bg-rose-950/45 dark:text-rose-450 border border-rose-150/25 dark:border-rose-900/20 flex items-center justify-center gap-1.5 cursor-pointer transition-all ${btnRadius}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    حذف الشعار
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Logo Preview box */}
+            <div className="flex flex-col items-center justify-center p-4 bg-white dark:bg-zinc-950 rounded-2xl border border-gray-150 dark:border-zinc-800/80 w-32 h-32 shrink-0 shadow-inner">
+              <Logo size={80} showText={false} customLogo={identity.customLogo} />
+              <span className="text-[9px] text-gray-400 mt-2 font-mono tracking-wider font-semibold">معاينة الشعار</span>
+            </div>
           </div>
         </div>
 
