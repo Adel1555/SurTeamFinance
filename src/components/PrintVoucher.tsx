@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { Voucher, VisualIdentity } from '../types';
+import { Voucher, VisualIdentity, EmployeePermissions } from '../types';
 import { formatOMR, formatDate, tafqeet, patchGetComputedStyle, withOklchWorkaround } from '../utils';
 import { Printer, Download, X, Stamp, ShieldCheck, FileSpreadsheet, Loader2 } from 'lucide-react';
 import Logo from './Logo';
@@ -15,17 +15,98 @@ interface PrintVoucherProps {
   voucher: Voucher | null;
   identity: VisualIdentity;
   onClose: () => void;
+  permissions?: EmployeePermissions;
+  isManagerMode?: boolean;
 }
 
-export default function PrintVoucher({ voucher, identity, onClose }: PrintVoucherProps) {
+export default function PrintVoucher({ voucher, identity, onClose, permissions, isManagerMode }: PrintVoucherProps) {
   if (!voucher) return null;
 
+  const currentPermissions = (() => {
+    if (isManagerMode) {
+      const allTrue: any = {};
+      const DEFAULT_FALLBACK = {
+        createReceipt: true,
+        createPayment: true,
+        viewRecords: true,
+        viewVoucher: true,
+        printVoucher: true,
+        exportVoucherPDF: true,
+        editReceipt: false,
+        editPayment: false,
+        deleteReceipt: false,
+        deletePayment: false,
+        viewAttachments: true,
+        addAttachments: true,
+        deleteAttachments: false,
+        viewArchive: false,
+        printFiltered: false,
+        exportFilteredPDF: false,
+        accessSettings: false,
+        changeIdentity: false,
+        exportBackup: false,
+        importBackup: false,
+        resetSystem: false,
+        viewDashboard: false,
+        checkUpdates: false,
+        managePermissions: false
+      };
+      Object.keys(DEFAULT_FALLBACK).forEach(k => { allTrue[k] = true; });
+      return allTrue as EmployeePermissions;
+    }
+    if (permissions) return permissions;
+    const DEFAULT_FALLBACK = {
+      createReceipt: true,
+      createPayment: true,
+      viewRecords: true,
+      viewVoucher: true,
+      printVoucher: true,
+      exportVoucherPDF: true,
+      editReceipt: false,
+      editPayment: false,
+      deleteReceipt: false,
+      deletePayment: false,
+      viewAttachments: true,
+      addAttachments: true,
+      deleteAttachments: false,
+      viewArchive: false,
+      printFiltered: false,
+      exportFilteredPDF: false,
+      accessSettings: false,
+      changeIdentity: false,
+      exportBackup: false,
+      importBackup: false,
+      resetSystem: false,
+      viewDashboard: false,
+      checkUpdates: false,
+      managePermissions: false
+    };
+    const saved = localStorage.getItem('sur_employee_permissions');
+    if (saved) {
+      try {
+        return { ...DEFAULT_FALLBACK, ...JSON.parse(saved) };
+      } catch (e) {
+        return DEFAULT_FALLBACK as EmployeePermissions;
+      }
+    }
+    return DEFAULT_FALLBACK as EmployeePermissions;
+  })();
+
+  const isPrintPermitted = !!currentPermissions.printVoucher;
+  const isPDFPermitted = !!currentPermissions.exportVoucherPDF;
+
   const handlePrint = () => {
+    if (!isPrintPermitted) {
+      return;
+    }
     console.log("PRINT BUTTON CLICKED");
     window.print();
   };
 
   const handleExportPDF = async () => {
+    if (!isPDFPermitted) {
+      return;
+    }
     console.log("PDF BUTTON CLICKED");
 
     const element = document.getElementById("printable-voucher");
@@ -108,7 +189,13 @@ export default function PrintVoucher({ voucher, identity, onClose }: PrintVouche
             
             <button
               onClick={handlePrint}
-              className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-sm hover:opacity-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              disabled={!isPrintPermitted}
+              title={!isPrintPermitted ? "غير مصرح لك بهذا الإجراء." : undefined}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                !isPrintPermitted 
+                  ? 'bg-emerald-650/40 text-emerald-200/60 cursor-not-allowed opacity-50' 
+                  : 'bg-emerald-600 text-white shadow-sm hover:opacity-95'
+              }`}
             >
               <Printer className="w-4 h-4" />
               طباعة
@@ -116,7 +203,13 @@ export default function PrintVoucher({ voucher, identity, onClose }: PrintVouche
 
             <button
               onClick={handleExportPDF}
-              className="px-5 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-sm hover:opacity-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              disabled={!isPDFPermitted}
+              title={!isPDFPermitted ? "غير مصرح لك بهذا الإجراء." : undefined}
+              className={`px-5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                !isPDFPermitted 
+                  ? 'bg-blue-650/40 text-blue-200/60 cursor-not-allowed opacity-50' 
+                  : 'bg-blue-600 text-white shadow-sm hover:opacity-95'
+              }`}
             >
               <Download className="w-4 h-4" />
               تصدير كـ PDF

@@ -5,9 +5,9 @@
 
 import React, { useState } from 'react';
 import { DatabaseService } from '../db';
-import { VisualIdentity, YearlyArchive, Voucher, AppDatabase } from '../types';
+import { VisualIdentity, YearlyArchive, Voucher, AppDatabase, EmployeePermissions } from '../types';
 import { formatOMR, formatDate } from '../utils';
-import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle } from 'lucide-react';
+import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle, Shield, RotateCcw, Save, ShieldCheck, Eye, Printer, FileText, FileSpreadsheet, Paperclip, Sliders, Database, RotateCw, BarChart2 } from 'lucide-react';
 import { AttachmentStorageService } from './AttachmentStorageService';
 import Logo from './Logo';
 
@@ -31,7 +31,35 @@ interface SettingsPanelProps {
   ignoredVersion: string;
   onIgnoreVersion: (version: string) => void;
   onResetIgnoreVersion: () => void;
+  isManagerMode?: boolean;
 }
+
+const DEFAULT_PERMISSIONS: EmployeePermissions = {
+  createReceipt: true,
+  createPayment: true,
+  viewRecords: true,
+  viewVoucher: true,
+  printVoucher: true,
+  exportVoucherPDF: true,
+  editReceipt: false,
+  editPayment: false,
+  deleteReceipt: false,
+  deletePayment: false,
+  viewAttachments: true,
+  addAttachments: true,
+  deleteAttachments: false,
+  viewArchive: false,
+  printFiltered: false,
+  exportFilteredPDF: false,
+  accessSettings: false,
+  changeIdentity: false,
+  exportBackup: false,
+  importBackup: false,
+  resetSystem: false,
+  viewDashboard: false,
+  checkUpdates: false,
+  managePermissions: false
+};
 
 export default function SettingsPanel({ 
   onDatabaseReseted, 
@@ -45,11 +73,44 @@ export default function SettingsPanel({
   isVersionNewer,
   ignoredVersion,
   onIgnoreVersion,
-  onResetIgnoreVersion
+  onResetIgnoreVersion,
+  isManagerMode = false
 }: SettingsPanelProps) {
   // Database States
   const [payers, setPayers] = useState<string[]>(() => DatabaseService.getPayers());
   const [methods, setMethods] = useState<string[]>(() => DatabaseService.getPaymentMethods());
+
+  // Permissions settings state & handlers
+  const [permissions, setPermissions] = useState<EmployeePermissions>(() => {
+    const saved = localStorage.getItem('sur_employee_permissions');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return { ...DEFAULT_PERMISSIONS, ...parsed };
+      } catch (e) {
+        return DEFAULT_PERMISSIONS;
+      }
+    }
+    return DEFAULT_PERMISSIONS;
+  });
+
+  const handleTogglePermission = (key: keyof EmployeePermissions) => {
+    setPermissions(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  const handleSavePermissions = () => {
+    localStorage.setItem('sur_employee_permissions', JSON.stringify(permissions));
+    showToast('🔒 تم حفظ صلاحيات الموظفين بنجاح وتفعيلها في وضع الموظف.');
+  };
+
+  const handleRestoreDefaultPermissions = () => {
+    setPermissions(DEFAULT_PERMISSIONS);
+    localStorage.setItem('sur_employee_permissions', JSON.stringify(DEFAULT_PERMISSIONS));
+    showToast('♻️ تم استعادة صلاحيات الموظفين الافتراضية.');
+  };
 
   // Input states
   const [newPayer, setNewPayer] = useState('');
@@ -685,6 +746,185 @@ export default function SettingsPanel({
 
           </div>
         </div>
+
+        {/* Employee Permissions Section (Only visible in Manager Mode) */}
+        {isManagerMode && (
+          <div className={`lg:col-span-12 p-6 ${cardStyleClass} space-y-6`} id="permissions-settings-section" dir="rtl">
+            <div className="flex items-center gap-2.5 border-b border-gray-100 dark:border-zinc-800/60 pb-3 flex-row-reverse text-right justify-between">
+              <div className="flex items-center gap-2.5 flex-row-reverse">
+                <ShieldCheck className="w-5 h-5 text-amber-500 animate-pulse" />
+                <div>
+                  <h3 className="text-sm font-black text-gray-800 dark:text-gray-150">إعدادات صلاحيات الموظفين</h3>
+                  <p className="text-[10px] text-gray-400 mt-0.5">حدد الصلاحيات المتاحة للموظفين عند تشغيل البرنامج في وضع الموظف الافتراضي.</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleRestoreDefaultPermissions}
+                  className="px-3 py-1.5 text-[10px] font-bold text-gray-650 dark:text-zinc-300 bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-750 rounded-xl border border-gray-200 dark:border-zinc-700/50 transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>استعادة الإعدادات الافتراضية للصلاحيات</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSavePermissions}
+                  className="px-3 py-1.5 text-[10px] font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>حفظ الصلاحيات</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              
+              {/* Group 1: الأساسية */}
+              <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-zinc-900/30 border border-gray-100 dark:border-zinc-800/50 space-y-3">
+                <h4 className="text-[11px] font-black text-amber-600 dark:text-amber-400 border-b border-gray-100 dark:border-zinc-800 pb-1.5 flex items-center gap-1.5 flex-row-reverse">
+                  <Database className="w-4 h-4 shrink-0" />
+                  <span>سندات القبض والصرف</span>
+                </h4>
+                <div className="space-y-2.5">
+                  {[
+                    { key: 'createReceipt', label: 'إنشاء سند قبض' },
+                    { key: 'createPayment', label: 'إنشاء سند صرف' },
+                    { key: 'editReceipt', label: 'تعديل سند قبض' },
+                    { key: 'editPayment', label: 'تعديل سند صرف' },
+                    { key: 'deleteReceipt', label: 'حذف سند قبض' },
+                    { key: 'deletePayment', label: 'حذف سند صرف' },
+                  ].map((perm) => (
+                    <label key={perm.key} className="flex items-center gap-2.5 cursor-pointer text-xs select-none hover:text-gray-900 dark:hover:text-white transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={permissions[perm.key as keyof EmployeePermissions]}
+                        onChange={() => handleTogglePermission(perm.key as keyof EmployeePermissions)}
+                        className="w-4 h-4 rounded text-[var(--primary-color)] focus:ring-[var(--primary-color)] dark:border-zinc-800 bg-gray-100 dark:bg-zinc-950/60 cursor-pointer accent-amber-500"
+                      />
+                      <span className="font-bold text-gray-700 dark:text-gray-300">{perm.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Group 2: عرض السجلات والأرشيف */}
+              <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-zinc-900/30 border border-gray-100 dark:border-zinc-800/50 space-y-3">
+                <h4 className="text-[11px] font-black text-blue-500 dark:text-blue-400 border-b border-gray-100 dark:border-zinc-800 pb-1.5 flex items-center gap-1.5 flex-row-reverse">
+                  <Eye className="w-4 h-4 shrink-0" />
+                  <span>السجلات وعرض البيانات</span>
+                </h4>
+                <div className="space-y-2.5">
+                  {[
+                    { key: 'viewRecords', label: 'عرض السجلات' },
+                    { key: 'viewVoucher', label: 'عرض السند' },
+                    { key: 'viewArchive', label: 'عرض الأرشيف' },
+                    { key: 'viewDashboard', label: 'عرض لوحة التحكم' },
+                  ].map((perm) => (
+                    <label key={perm.key} className="flex items-center gap-2.5 cursor-pointer text-xs select-none hover:text-gray-900 dark:hover:text-white transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={permissions[perm.key as keyof EmployeePermissions]}
+                        onChange={() => handleTogglePermission(perm.key as keyof EmployeePermissions)}
+                        className="w-4 h-4 rounded text-[var(--primary-color)] focus:ring-[var(--primary-color)] dark:border-zinc-800 bg-gray-100 dark:bg-zinc-950/60 cursor-pointer accent-blue-500"
+                      />
+                      <span className="font-bold text-gray-700 dark:text-gray-300">{perm.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Group 3: المرفقات والملفات */}
+              <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-zinc-900/30 border border-gray-100 dark:border-zinc-800/50 space-y-3">
+                <h4 className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 border-b border-gray-100 dark:border-zinc-800 pb-1.5 flex items-center gap-1.5 flex-row-reverse">
+                  <Paperclip className="w-4 h-4 shrink-0" />
+                  <span>المرفقات والملفات الثبوتية</span>
+                </h4>
+                <div className="space-y-2.5">
+                  {[
+                    { key: 'viewAttachments', label: 'عرض المرفقات' },
+                    { key: 'addAttachments', label: 'إضافة المرفقات' },
+                    { key: 'deleteAttachments', label: 'حذف المرفقات' },
+                  ].map((perm) => (
+                    <label key={perm.key} className="flex items-center gap-2.5 cursor-pointer text-xs select-none hover:text-gray-900 dark:hover:text-white transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={permissions[perm.key as keyof EmployeePermissions]}
+                        onChange={() => handleTogglePermission(perm.key as keyof EmployeePermissions)}
+                        className="w-4 h-4 rounded text-[var(--primary-color)] focus:ring-[var(--primary-color)] dark:border-zinc-800 bg-gray-100 dark:bg-zinc-950/60 cursor-pointer accent-emerald-500"
+                      />
+                      <span className="font-bold text-gray-700 dark:text-gray-300">{perm.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Group 4: الطباعة والتصدير */}
+              <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-zinc-900/30 border border-gray-100 dark:border-zinc-800/50 space-y-3">
+                <h4 className="text-[11px] font-black text-teal-600 dark:text-teal-400 border-b border-gray-100 dark:border-zinc-800 pb-1.5 flex items-center gap-1.5 flex-row-reverse">
+                  <Printer className="w-4 h-4 shrink-0" />
+                  <span>الطباعة والتصدير</span>
+                </h4>
+                <div className="space-y-2.5">
+                  {[
+                    { key: 'printVoucher', label: 'طباعة السند' },
+                    { key: 'exportVoucherPDF', label: 'تصدير السند PDF' },
+                    { key: 'printFiltered', label: 'طباعة النتائج المفلترة' },
+                    { key: 'exportFilteredPDF', label: 'تصدير النتائج المفلترة PDF' },
+                  ].map((perm) => (
+                    <label key={perm.key} className="flex items-center gap-2.5 cursor-pointer text-xs select-none hover:text-gray-900 dark:hover:text-white transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={permissions[perm.key as keyof EmployeePermissions]}
+                        onChange={() => handleTogglePermission(perm.key as keyof EmployeePermissions)}
+                        className="w-4 h-4 rounded text-[var(--primary-color)] focus:ring-[var(--primary-color)] dark:border-zinc-800 bg-gray-100 dark:bg-zinc-950/60 cursor-pointer accent-teal-500"
+                      />
+                      <span className="font-bold text-gray-700 dark:text-gray-300">{perm.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Group 5: الإعدادات والأمن المالي */}
+              <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-zinc-900/30 border border-gray-100 dark:border-zinc-800/50 col-span-1 md:col-span-2 xl:col-span-2 space-y-3">
+                <h4 className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 border-b border-gray-100 dark:border-zinc-800 pb-1.5 flex items-center gap-1.5 flex-row-reverse">
+                  <Sliders className="w-4 h-4 shrink-0" />
+                  <span>الإعدادات والتحشيد الإداري الفني</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">
+                  {[
+                    { key: 'accessSettings', label: 'الوصول إلى الإعدادات' },
+                    { key: 'changeIdentity', label: 'تغيير الهوية البصرية' },
+                    { key: 'exportBackup', label: 'تصدير نسخة احتياطية' },
+                    { key: 'importBackup', label: 'استيراد نسخة احتياطية' },
+                    { key: 'resetSystem', label: 'تصفير النظام' },
+                    { key: 'checkUpdates', label: 'التحقق من التحديثات' },
+                    { key: 'managePermissions', label: 'إدارة الصلاحيات' },
+                  ].map((perm) => (
+                    <label key={perm.key} className="flex items-center gap-2.5 cursor-pointer text-xs select-none hover:text-gray-900 dark:hover:text-white transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={permissions[perm.key as keyof EmployeePermissions]}
+                        onChange={() => handleTogglePermission(perm.key as keyof EmployeePermissions)}
+                        className="w-4 h-4 rounded text-[var(--primary-color)] focus:ring-[var(--primary-color)] dark:border-zinc-800 bg-gray-100 dark:bg-zinc-950/60 cursor-pointer accent-indigo-500"
+                      />
+                      <span className="font-bold text-gray-700 dark:text-gray-300">{perm.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Hint / Warning banner */}
+            <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/15 text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed text-right flex-row-reverse">
+              <Shield className="w-4 h-4 shrink-0 text-amber-500 animate-pulse" />
+              <span>
+                <strong>تنويه أمني:</strong> تقتصر هذه الإعدادات وصلاحيات الوصول على "وضع الموظف" فقط. أما "وضع المدير المالي" فيتمتع بصلاحيات وصول كاملة وغير مقيدة لتعديل أو ضبط أي قسم محاسبي في النظام.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Toggle for Duplicate Voucher alert */}
         <div className={`lg:col-span-12 p-5 ${cardStyleClass} space-y-3`}>

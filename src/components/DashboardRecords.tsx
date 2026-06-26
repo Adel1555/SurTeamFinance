@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { Voucher, VisualIdentity } from '../types';
+import { Voucher, VisualIdentity, EmployeePermissions } from '../types';
 import { formatOMR, formatDate } from '../utils';
 import { Printer, Trash2, FileText, ArrowUpRight, ArrowDownRight, Layers, HelpCircle, Check, X, Eye, Pencil } from 'lucide-react';
 
@@ -15,13 +15,85 @@ interface DashboardRecordsProps {
   onPrintVoucher: (voucher: Voucher) => void;
   onViewVoucher: (voucher: Voucher) => void;
   onEditVoucher: (voucher: Voucher) => void;
+  permissions?: EmployeePermissions;
+  isManagerMode?: boolean;
 }
 
-export default function DashboardRecords({ vouchers, identity, onDeleteVoucher, onPrintVoucher, onViewVoucher, onEditVoucher }: DashboardRecordsProps) {
+export default function DashboardRecords({ vouchers, identity, onDeleteVoucher, onPrintVoucher, onViewVoucher, onEditVoucher, permissions, isManagerMode }: DashboardRecordsProps) {
   const [filterType, setFilterType] = useState<'all' | 'receipt' | 'payment'>('all');
   
   // Track id being deleted to show beautiful inline prompt "هل أنت متأكد من حذف هذا السند؟ نعم/لا"
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const currentPermissions = (() => {
+    if (isManagerMode) {
+      const allTrue: any = {};
+      const DEFAULT_FALLBACK = {
+        createReceipt: true,
+        createPayment: true,
+        viewRecords: true,
+        viewVoucher: true,
+        printVoucher: true,
+        exportVoucherPDF: true,
+        editReceipt: false,
+        editPayment: false,
+        deleteReceipt: false,
+        deletePayment: false,
+        viewAttachments: true,
+        addAttachments: true,
+        deleteAttachments: false,
+        viewArchive: false,
+        printFiltered: false,
+        exportFilteredPDF: false,
+        accessSettings: false,
+        changeIdentity: false,
+        exportBackup: false,
+        importBackup: false,
+        resetSystem: false,
+        viewDashboard: false,
+        checkUpdates: false,
+        managePermissions: false
+      };
+      Object.keys(DEFAULT_FALLBACK).forEach(k => { allTrue[k] = true; });
+      return allTrue as EmployeePermissions;
+    }
+    if (permissions) return permissions;
+    const DEFAULT_FALLBACK = {
+      createReceipt: true,
+      createPayment: true,
+      viewRecords: true,
+      viewVoucher: true,
+      printVoucher: true,
+      exportVoucherPDF: true,
+      editReceipt: false,
+      editPayment: false,
+      deleteReceipt: false,
+      deletePayment: false,
+      viewAttachments: true,
+      addAttachments: true,
+      deleteAttachments: false,
+      viewArchive: false,
+      printFiltered: false,
+      exportFilteredPDF: false,
+      accessSettings: false,
+      changeIdentity: false,
+      exportBackup: false,
+      importBackup: false,
+      resetSystem: false,
+      viewDashboard: false,
+      checkUpdates: false,
+      managePermissions: false
+    };
+    const saved = localStorage.getItem('sur_employee_permissions');
+    if (saved) {
+      try {
+        return { ...DEFAULT_FALLBACK, ...JSON.parse(saved) };
+      } catch (e) {
+        return DEFAULT_FALLBACK as EmployeePermissions;
+      }
+    }
+    return DEFAULT_FALLBACK as EmployeePermissions;
+  })();
 
   const filteredList = vouchers.filter(v => {
     if (filterType === 'all') return true;
@@ -97,6 +169,12 @@ export default function DashboardRecords({ vouchers, identity, onDeleteVoucher, 
             const isReceipt = v.type === 'receipt';
             const isDeletingThis = deletingId === v.id;
             
+            const isViewPermitted = !!currentPermissions.viewVoucher;
+            const isEditPermitted = isReceipt ? !!currentPermissions.editReceipt : !!currentPermissions.editPayment;
+            const isPDFPermitted = !!currentPermissions.exportVoucherPDF;
+            const isPrintPermitted = !!currentPermissions.printVoucher;
+            const isDeletePermitted = isReceipt ? !!currentPermissions.deleteReceipt : !!currentPermissions.deletePayment;
+
             return (
               <div 
                 key={v.id} 
@@ -140,45 +218,70 @@ export default function DashboardRecords({ vouchers, identity, onDeleteVoucher, 
                 <div className="flex items-center gap-1.5 shrink-0">
                   {/* Icon 4: View/Open Voucher */}
                   <button
-                    onClick={() => onViewVoucher(v)}
-                    title="عرض السند"
-                    className="p-2 rounded-lg bg-gray-150/70 dark:bg-zinc-900 text-gray-500 hover:text-[var(--primary-color)] hover:bg-[var(--primary-color-alpha)] transition-all hover:scale-105 cursor-pointer"
+                    onClick={() => isViewPermitted && onViewVoucher(v)}
+                    disabled={!isViewPermitted}
+                    title={!isViewPermitted ? "غير مصرح لك بهذا الإجراء." : "عرض السند"}
+                    className={`p-2 rounded-lg transition-all hover:scale-105 cursor-pointer ${
+                      !isViewPermitted
+                        ? "bg-gray-200/50 dark:bg-zinc-800 text-gray-400 cursor-not-allowed opacity-50"
+                        : "bg-gray-150/70 dark:bg-zinc-900 text-gray-500 hover:text-[var(--primary-color)] hover:bg-[var(--primary-color-alpha)]"
+                    }`}
                   >
                     <Eye className="w-3.5 h-3.5" />
                   </button>
 
                   {/* Edit Voucher */}
                   <button
-                    onClick={() => onEditVoucher(v)}
-                    title="تعديل السند"
-                    className="p-2 rounded-lg bg-gray-150/70 dark:bg-zinc-900 text-gray-500 hover:text-blue-600 hover:bg-blue-100/30 transition-all hover:scale-105 cursor-pointer"
+                    onClick={() => isEditPermitted && onEditVoucher(v)}
+                    disabled={!isEditPermitted}
+                    title={!isEditPermitted ? "غير مصرح لك بهذا الإجراء." : "تعديل السند"}
+                    className={`p-2 rounded-lg transition-all hover:scale-105 cursor-pointer ${
+                      !isEditPermitted
+                        ? "bg-gray-200/50 dark:bg-zinc-800 text-gray-400 cursor-not-allowed opacity-50"
+                        : "bg-gray-150/70 dark:bg-zinc-900 text-gray-500 hover:text-blue-600 hover:bg-blue-100/30"
+                    }`}
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
 
                   {/* Icon 3: Convert/Export to PDF */}
                   <button
-                    onClick={() => onPrintVoucher(v)}
-                    title="تحويل إلى PDF وتصديره"
-                    className="p-2 rounded-lg bg-gray-150/70 dark:bg-zinc-900 text-gray-500 hover:text-[var(--primary-color)] hover:bg-[var(--primary-color-alpha)] transition-all hover:scale-105 cursor-pointer"
+                    onClick={() => isPDFPermitted && onPrintVoucher(v)}
+                    disabled={!isPDFPermitted}
+                    title={!isPDFPermitted ? "غير مصرح لك بهذا الإجراء." : "تحويل إلى PDF وتصديره"}
+                    className={`p-2 rounded-lg transition-all hover:scale-105 cursor-pointer ${
+                      !isPDFPermitted
+                        ? "bg-gray-200/50 dark:bg-zinc-800 text-gray-400 cursor-not-allowed opacity-50"
+                        : "bg-gray-150/70 dark:bg-zinc-900 text-gray-500 hover:text-[var(--primary-color)] hover:bg-[var(--primary-color-alpha)]"
+                    }`}
                   >
                     <FileText className="w-3.5 h-3.5" />
                   </button>
 
                   {/* Icon 1: Print */}
                   <button
-                    onClick={() => onPrintVoucher(v)}
-                    title="طباعة السند"
-                    className="p-2 rounded-lg bg-gray-150/70 dark:bg-zinc-900 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-all hover:scale-105 cursor-pointer"
+                    onClick={() => isPrintPermitted && onPrintVoucher(v)}
+                    disabled={!isPrintPermitted}
+                    title={!isPrintPermitted ? "غير مصرح لك بهذا الإجراء." : "طباعة السند"}
+                    className={`p-2 rounded-lg transition-all hover:scale-105 cursor-pointer ${
+                      !isPrintPermitted
+                        ? "bg-gray-200/50 dark:bg-zinc-800 text-gray-400 cursor-not-allowed opacity-50"
+                        : "bg-gray-150/70 dark:bg-zinc-900 text-gray-500 hover:text-gray-900 dark:hover:text-white"
+                    }`}
                   >
                     <Printer className="w-3.5 h-3.5" />
                   </button>
 
                   {/* Icon 2: Delete */}
                   <button
-                    onClick={() => setDeletingId(v.id)}
-                    title="حذف السند"
-                    className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/20 text-rose-600 hover:text-rose-750 dark:hover:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-all hover:scale-105 cursor-pointer"
+                    onClick={() => isDeletePermitted && setDeletingId(v.id)}
+                    disabled={!isDeletePermitted}
+                    title={!isDeletePermitted ? "غير مصرح لك بهذا الإجراء." : "حذف السند"}
+                    className={`p-2 rounded-lg transition-all hover:scale-105 cursor-pointer ${
+                      !isDeletePermitted
+                        ? "bg-rose-100/40 dark:bg-rose-950/10 text-rose-300 cursor-not-allowed opacity-50"
+                        : "bg-rose-50 dark:bg-rose-950/20 text-rose-600 hover:text-rose-750 dark:hover:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/50"
+                    }`}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

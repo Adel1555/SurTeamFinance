@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Voucher, VisualIdentity, AttachmentMetadata } from '../types';
+import { Voucher, VisualIdentity, AttachmentMetadata, EmployeePermissions } from '../types';
 import { formatOMR, formatDate, tafqeet } from '../utils';
 import { AttachmentStorageService } from './AttachmentStorageService';
 import { X, Printer, FileText, Calendar, DollarSign, User, Tag, HelpCircle, Paperclip, Eye, Loader2, Clock, Pencil } from 'lucide-react';
@@ -15,10 +15,82 @@ interface VoucherDetailsModalProps {
   onClose: () => void;
   onPrint: (voucher: Voucher) => void;
   onEdit: (voucher: Voucher) => void;
+  permissions?: EmployeePermissions;
+  isManagerMode?: boolean;
 }
 
-export default function VoucherDetailsModal({ voucher, identity, onClose, onPrint, onEdit }: VoucherDetailsModalProps) {
+export default function VoucherDetailsModal({ voucher, identity, onClose, onPrint, onEdit, permissions, isManagerMode }: VoucherDetailsModalProps) {
   if (!voucher) return null;
+
+  const currentPermissions = (() => {
+    if (isManagerMode) {
+      const allTrue: any = {};
+      const DEFAULT_FALLBACK = {
+        createReceipt: true,
+        createPayment: true,
+        viewRecords: true,
+        viewVoucher: true,
+        printVoucher: true,
+        exportVoucherPDF: true,
+        editReceipt: false,
+        editPayment: false,
+        deleteReceipt: false,
+        deletePayment: false,
+        viewAttachments: true,
+        addAttachments: true,
+        deleteAttachments: false,
+        viewArchive: false,
+        printFiltered: false,
+        exportFilteredPDF: false,
+        accessSettings: false,
+        changeIdentity: false,
+        exportBackup: false,
+        importBackup: false,
+        resetSystem: false,
+        viewDashboard: false,
+        checkUpdates: false,
+        managePermissions: false
+      };
+      Object.keys(DEFAULT_FALLBACK).forEach(k => { allTrue[k] = true; });
+      return allTrue as EmployeePermissions;
+    }
+    if (permissions) return permissions;
+    const DEFAULT_FALLBACK = {
+      createReceipt: true,
+      createPayment: true,
+      viewRecords: true,
+      viewVoucher: true,
+      printVoucher: true,
+      exportVoucherPDF: true,
+      editReceipt: false,
+      editPayment: false,
+      deleteReceipt: false,
+      deletePayment: false,
+      viewAttachments: true,
+      addAttachments: true,
+      deleteAttachments: false,
+      viewArchive: false,
+      printFiltered: false,
+      exportFilteredPDF: false,
+      accessSettings: false,
+      changeIdentity: false,
+      exportBackup: false,
+      importBackup: false,
+      resetSystem: false,
+      viewDashboard: false,
+      checkUpdates: false,
+      managePermissions: false
+    };
+    const saved = localStorage.getItem('sur_employee_permissions');
+    if (saved) {
+      try {
+        return { ...DEFAULT_FALLBACK, ...JSON.parse(saved) };
+      } catch (e) {
+        return DEFAULT_FALLBACK as EmployeePermissions;
+      }
+    }
+    return DEFAULT_FALLBACK as EmployeePermissions;
+  })();
 
   // Attachment preview states
   const [previewAttachment, setPreviewAttachment] = useState<AttachmentMetadata | null>(null);
@@ -279,8 +351,14 @@ export default function VoucherDetailsModal({ voucher, identity, onClose, onPrin
             
             {/* Print Button */}
             <button
-              onClick={() => onPrint(voucher)}
-              className={`px-4 py-2 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all flex items-center gap-1.5 cursor-pointer ${btnRadius}`}
+              onClick={() => currentPermissions.printVoucher && onPrint(voucher)}
+              disabled={!currentPermissions.printVoucher}
+              title={!currentPermissions.printVoucher ? "غير مصرح لك بهذا الإجراء." : "طباعة السند"}
+              className={`px-4 py-2 text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${btnRadius} ${
+                !currentPermissions.printVoucher 
+                  ? 'bg-emerald-600/45 text-emerald-200/60 cursor-not-allowed opacity-50' 
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+              }`}
             >
               <Printer className="w-4 h-4" />
               طباعة السند
@@ -288,24 +366,43 @@ export default function VoucherDetailsModal({ voucher, identity, onClose, onPrin
 
             {/* Export PDF Button */}
             <button
-              onClick={() => onPrint(voucher)}
-              className={`px-4 py-2 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all flex items-center gap-1.5 cursor-pointer ${btnRadius}`}
+              onClick={() => currentPermissions.exportVoucherPDF && onPrint(voucher)}
+              disabled={!currentPermissions.exportVoucherPDF}
+              title={!currentPermissions.exportVoucherPDF ? "غير مصرح لك بهذا الإجراء." : "تصدير PDF"}
+              className={`px-4 py-2 text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${btnRadius} ${
+                !currentPermissions.exportVoucherPDF 
+                  ? 'bg-blue-600/45 text-blue-200/60 cursor-not-allowed opacity-50' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
+              }`}
             >
               <FileText className="w-4 h-4" />
               تصدير PDF
             </button>
 
             {/* Edit Button */}
-            <button
-              onClick={() => {
-                onEdit(voucher);
-                onClose();
-              }}
-              className={`px-4 py-2 text-xs font-black bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-all flex items-center gap-1.5 cursor-pointer ${btnRadius}`}
-            >
-              <Pencil className="w-4 h-4" />
-              تعديل السند
-            </button>
+            {(() => {
+              const isEditPermitted = isReceipt ? !!currentPermissions.editReceipt : !!currentPermissions.editPayment;
+              return (
+                <button
+                  onClick={() => {
+                    if (isEditPermitted) {
+                      onEdit(voucher);
+                      onClose();
+                    }
+                  }}
+                  disabled={!isEditPermitted}
+                  title={!isEditPermitted ? "غير مصرح لك بهذا الإجراء." : "تعديل السند"}
+                  className={`px-4 py-2 text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${btnRadius} ${
+                    !isEditPermitted 
+                      ? 'bg-amber-600/45 text-amber-200/60 cursor-not-allowed opacity-50' 
+                      : 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm'
+                  }`}
+                >
+                  <Pencil className="w-4 h-4" />
+                  تعديل السند
+                </button>
+              );
+            })()}
           </div>
 
           {/* Close Button */}

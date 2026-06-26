@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { Voucher, VisualIdentity, VoucherType } from '../types';
+import { Voucher, VisualIdentity, VoucherType, EmployeePermissions } from '../types';
 import { formatDate, formatOMR } from '../utils';
 import { Search, Filter, Trash2, Printer, FileText, ArrowUpRight, ArrowDownRight, ArrowUpDown, RefreshCw, Calendar, ListFilter, Eye, Pencil } from 'lucide-react';
 import PrintFilteredVouchers from './PrintFilteredVouchers';
@@ -16,14 +16,86 @@ interface ArchivePanelProps {
   onPrintVoucher: (voucher: Voucher) => void;
   onViewVoucher: (voucher: Voucher) => void;
   onEditVoucher: (voucher: Voucher) => void;
+  permissions?: EmployeePermissions;
+  isManagerMode?: boolean;
 }
 
-export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPrintVoucher, onViewVoucher, onEditVoucher }: ArchivePanelProps) {
+export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPrintVoucher, onViewVoucher, onEditVoucher, permissions, isManagerMode }: ArchivePanelProps) {
   // Custom delete confirmation state (avoids iframe blocking dialogs)
   const [voucherToDelete, setVoucherToDelete] = useState<Voucher | null>(null);
   
   // Custom state for showing the print report
   const [showPrintReport, setShowPrintReport] = useState(false);
+
+  const currentPermissions = (() => {
+    if (isManagerMode) {
+      const allTrue: any = {};
+      const DEFAULT_FALLBACK = {
+        createReceipt: true,
+        createPayment: true,
+        viewRecords: true,
+        viewVoucher: true,
+        printVoucher: true,
+        exportVoucherPDF: true,
+        editReceipt: false,
+        editPayment: false,
+        deleteReceipt: false,
+        deletePayment: false,
+        viewAttachments: true,
+        addAttachments: true,
+        deleteAttachments: false,
+        viewArchive: false,
+        printFiltered: false,
+        exportFilteredPDF: false,
+        accessSettings: false,
+        changeIdentity: false,
+        exportBackup: false,
+        importBackup: false,
+        resetSystem: false,
+        viewDashboard: false,
+        checkUpdates: false,
+        managePermissions: false
+      };
+      Object.keys(DEFAULT_FALLBACK).forEach(k => { allTrue[k] = true; });
+      return allTrue as EmployeePermissions;
+    }
+    if (permissions) return permissions;
+    const DEFAULT_FALLBACK = {
+      createReceipt: true,
+      createPayment: true,
+      viewRecords: true,
+      viewVoucher: true,
+      printVoucher: true,
+      exportVoucherPDF: true,
+      editReceipt: false,
+      editPayment: false,
+      deleteReceipt: false,
+      deletePayment: false,
+      viewAttachments: true,
+      addAttachments: true,
+      deleteAttachments: false,
+      viewArchive: false,
+      printFiltered: false,
+      exportFilteredPDF: false,
+      accessSettings: false,
+      changeIdentity: false,
+      exportBackup: false,
+      importBackup: false,
+      resetSystem: false,
+      viewDashboard: false,
+      checkUpdates: false,
+      managePermissions: false
+    };
+    const saved = localStorage.getItem('sur_employee_permissions');
+    if (saved) {
+      try {
+        return { ...DEFAULT_FALLBACK, ...JSON.parse(saved) };
+      } catch (e) {
+        return DEFAULT_FALLBACK as EmployeePermissions;
+      }
+    }
+    return DEFAULT_FALLBACK as EmployeePermissions;
+  })();
 
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
@@ -378,16 +450,28 @@ export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPr
               <div className="flex gap-2 w-full sm:w-auto">
                 <button
                   type="button"
-                  onClick={() => setShowPrintReport(true)}
-                  className="flex-1 sm:flex-initial px-4 py-2.5 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  onClick={() => currentPermissions.printFiltered && setShowPrintReport(true)}
+                  disabled={!currentPermissions.printFiltered}
+                  title={!currentPermissions.printFiltered ? "غير مصرح لك بهذا الإجراء." : (methodFilter === 'all' ? 'طباعة كل السجلات المعروضة' : `طباعة النتائج المفلترة (${methodFilter})`)}
+                  className={`flex-1 sm:flex-initial px-4 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${
+                    !currentPermissions.printFiltered 
+                      ? 'bg-emerald-600/45 text-emerald-200/60 cursor-not-allowed opacity-50' 
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  }`}
                 >
                   <Printer className="w-4 h-4" />
                   {methodFilter === 'all' ? 'طباعة كل السجلات المعروضة' : `طباعة النتائج المفلترة (${methodFilter})`}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowPrintReport(true)}
-                  className="flex-1 sm:flex-initial px-4 py-2.5 text-xs font-black bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  onClick={() => currentPermissions.exportFilteredPDF && setShowPrintReport(true)}
+                  disabled={!currentPermissions.exportFilteredPDF}
+                  title={!currentPermissions.exportFilteredPDF ? "غير مصرح لك بهذا الإجراء." : (methodFilter === 'all' ? 'تصدير كل السجلات المعروضة PDF' : `تصدير النتائج المفلترة PDF (${methodFilter})`)}
+                  className={`flex-1 sm:flex-initial px-4 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${
+                    !currentPermissions.exportFilteredPDF 
+                      ? 'bg-blue-600/45 text-blue-200/60 cursor-not-allowed opacity-50' 
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
                 >
                   <FileText className="w-4 h-4" />
                   {methodFilter === 'all' ? 'تصدير كل السجلات المعروضة PDF' : `تصدير النتائج المفلترة PDF (${methodFilter})`}
@@ -525,60 +609,95 @@ export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPr
 
                     {/* Actions Group conforming to design instructions */}
                     <td className="p-3.5 text-center pl-5">
-                      <div className="flex items-center justify-center gap-2">
-                        
-                        {/* View Voucher */}
-                        <button
-                          type="button"
-                          onClick={() => onViewVoucher(v)}
-                          title="عرض السند"
-                          className="text-gray-500 dark:text-gray-400 bg-slate-100 dark:bg-zinc-900 hover:opacity-85 p-1.5 rounded-lg transition-all border border-gray-200/40 dark:border-zinc-800"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
+                      {(() => {
+                        const isViewPermitted = !!currentPermissions.viewVoucher;
+                        const isEditPermitted = isReceipt ? !!currentPermissions.editReceipt : !!currentPermissions.editPayment;
+                        const isPDFPermitted = !!currentPermissions.exportVoucherPDF;
+                        const isPrintPermitted = !!currentPermissions.printVoucher;
+                        const isDeletePermitted = isReceipt ? !!currentPermissions.deleteReceipt : !!currentPermissions.deletePayment;
 
-                        {/* Edit Voucher */}
-                        <button
-                          type="button"
-                          onClick={() => onEditVoucher(v)}
-                          title="تعديل السند"
-                          className="text-blue-600 dark:text-blue-400 bg-slate-100 dark:bg-zinc-900 hover:opacity-85 p-1.5 rounded-lg transition-all border border-gray-200/40 dark:border-zinc-800"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
+                        return (
+                          <div className="flex items-center justify-center gap-2">
+                            
+                            {/* View Voucher */}
+                            <button
+                              type="button"
+                              onClick={() => isViewPermitted && onViewVoucher(v)}
+                              disabled={!isViewPermitted}
+                              title={!isViewPermitted ? "غير مصرح لك بهذا الإجراء." : "عرض السند"}
+                              className={`p-1.5 rounded-lg transition-all border ${
+                                !isViewPermitted
+                                  ? "text-gray-405 dark:text-gray-500 bg-gray-200/50 dark:bg-zinc-800 cursor-not-allowed opacity-50 border-transparent"
+                                  : "text-gray-500 dark:text-gray-400 bg-slate-100 dark:bg-zinc-900 hover:opacity-85 border-gray-200/40 dark:border-zinc-800"
+                              }`}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
 
-                        {/* Print preview / Edit */}
-                        <button
-                          type="button"
-                          onClick={() => onPrintVoucher(v)}
-                          title="عرض ومعاينة السند وتصديره"
-                          style={{ color: identity.primaryColor }}
-                          className="bg-slate-100 dark:bg-zinc-900 hover:opacity-80 p-1.5 rounded-lg transition-all"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                        </button>
+                            {/* Edit Voucher */}
+                            <button
+                              type="button"
+                              onClick={() => isEditPermitted && onEditVoucher(v)}
+                              disabled={!isEditPermitted}
+                              title={!isEditPermitted ? "غير مصرح لك بهذا الإجراء." : "تعديل السند"}
+                              className={`p-1.5 rounded-lg transition-all border ${
+                                !isEditPermitted
+                                  ? "text-gray-405 dark:text-gray-500 bg-gray-200/50 dark:bg-zinc-800 cursor-not-allowed opacity-50 border-transparent"
+                                  : "text-blue-600 dark:text-blue-400 bg-slate-100 dark:bg-zinc-900 hover:opacity-85 border-gray-200/40 dark:border-zinc-800"
+                              }`}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
 
-                        {/* Direct browser trigger print */}
-                        <button
-                          type="button"
-                          onClick={() => onPrintVoucher(v)}
-                          title="طباعة السند"
-                          className="text-gray-500 dark:text-gray-400 bg-slate-100 dark:bg-zinc-900 hover:opacity-85 p-1.5 rounded-lg transition-all"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                        </button>
+                            {/* Print preview / Edit */}
+                            <button
+                              type="button"
+                              onClick={() => isPDFPermitted && onPrintVoucher(v)}
+                              disabled={!isPDFPermitted}
+                              title={!isPDFPermitted ? "غير مصرح لك بهذا الإجراء." : "عرض ومعاينة السند وتصديره"}
+                              style={isPDFPermitted ? { color: identity.primaryColor } : undefined}
+                              className={`p-1.5 rounded-lg transition-all ${
+                                !isPDFPermitted
+                                  ? "text-gray-405 dark:text-gray-500 bg-gray-200/50 dark:bg-zinc-800 cursor-not-allowed opacity-50"
+                                  : "bg-slate-100 dark:bg-zinc-900 hover:opacity-80"
+                              }`}
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                            </button>
 
-                        {/* Delete voucher */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTrigger(v)}
-                          title="حذف السند"
-                          className="text-rose-600 bg-rose-50 dark:bg-rose-950/20 hover:bg-rose-100 hover:text-rose-700 p-1.5 rounded-lg transition-all"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                            {/* Direct browser trigger print */}
+                            <button
+                              type="button"
+                              onClick={() => isPrintPermitted && onPrintVoucher(v)}
+                              disabled={!isPrintPermitted}
+                              title={!isPrintPermitted ? "غير مصرح لك بهذا الإجراء." : "طباعة السند"}
+                              className={`p-1.5 rounded-lg transition-all ${
+                                !isPrintPermitted
+                                  ? "text-gray-450 dark:text-gray-500 bg-gray-200/50 dark:bg-zinc-800 cursor-not-allowed opacity-50"
+                                  : "text-gray-500 dark:text-gray-400 bg-slate-100 dark:bg-zinc-900 hover:opacity-85"
+                              }`}
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
 
-                      </div>
+                            {/* Delete voucher */}
+                            <button
+                              type="button"
+                              onClick={() => isDeletePermitted && handleDeleteTrigger(v)}
+                              disabled={!isDeletePermitted}
+                              title={!isDeletePermitted ? "غير مصرح لك بهذا الإجراء." : "حذف السند"}
+                              className={`p-1.5 rounded-lg transition-all ${
+                                !isDeletePermitted
+                                  ? "text-rose-300 bg-rose-100/40 dark:bg-rose-950/10 cursor-not-allowed opacity-50"
+                                  : "text-rose-600 bg-rose-50 dark:bg-rose-950/20 hover:bg-rose-100 hover:text-rose-700"
+                              }`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+
+                          </div>
+                        );
+                      })()}
                     </td>
 
                   </tr>
@@ -633,6 +752,8 @@ export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPr
           selectedMethod={methodFilter}
           identity={identity}
           onClose={() => setShowPrintReport(false)}
+          permissions={currentPermissions}
+          isManagerMode={isManagerMode}
         />
       )}
 

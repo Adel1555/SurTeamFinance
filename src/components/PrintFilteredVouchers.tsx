@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { Voucher, VisualIdentity } from '../types';
+import { Voucher, VisualIdentity, EmployeePermissions } from '../types';
 import { formatOMR, formatDate, withOklchWorkaround } from '../utils';
 import { Printer, Download, X, FileText, Loader2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import Logo from './Logo';
@@ -16,10 +16,85 @@ interface PrintFilteredVouchersProps {
   selectedMethod: string;
   identity: VisualIdentity;
   onClose: () => void;
+  permissions?: EmployeePermissions;
+  isManagerMode?: boolean;
 }
 
-export default function PrintFilteredVouchers({ vouchers, selectedMethod, identity, onClose }: PrintFilteredVouchersProps) {
+export default function PrintFilteredVouchers({ vouchers, selectedMethod, identity, onClose, permissions, isManagerMode }: PrintFilteredVouchersProps) {
   const [isExporting, setIsExporting] = useState(false);
+
+  const currentPermissions = (() => {
+    if (isManagerMode) {
+      const allTrue: any = {};
+      const DEFAULT_FALLBACK = {
+        createReceipt: true,
+        createPayment: true,
+        viewRecords: true,
+        viewVoucher: true,
+        printVoucher: true,
+        exportVoucherPDF: true,
+        editReceipt: false,
+        editPayment: false,
+        deleteReceipt: false,
+        deletePayment: false,
+        viewAttachments: true,
+        addAttachments: true,
+        deleteAttachments: false,
+        viewArchive: false,
+        printFiltered: false,
+        exportFilteredPDF: false,
+        accessSettings: false,
+        changeIdentity: false,
+        exportBackup: false,
+        importBackup: false,
+        resetSystem: false,
+        viewDashboard: false,
+        checkUpdates: false,
+        managePermissions: false
+      };
+      Object.keys(DEFAULT_FALLBACK).forEach(k => { allTrue[k] = true; });
+      return allTrue as EmployeePermissions;
+    }
+    if (permissions) return permissions;
+    const DEFAULT_FALLBACK = {
+      createReceipt: true,
+      createPayment: true,
+      viewRecords: true,
+      viewVoucher: true,
+      printVoucher: true,
+      exportVoucherPDF: true,
+      editReceipt: false,
+      editPayment: false,
+      deleteReceipt: false,
+      deletePayment: false,
+      viewAttachments: true,
+      addAttachments: true,
+      deleteAttachments: false,
+      viewArchive: false,
+      printFiltered: false,
+      exportFilteredPDF: false,
+      accessSettings: false,
+      changeIdentity: false,
+      exportBackup: false,
+      importBackup: false,
+      resetSystem: false,
+      viewDashboard: false,
+      checkUpdates: false,
+      managePermissions: false
+    };
+    const saved = localStorage.getItem('sur_employee_permissions');
+    if (saved) {
+      try {
+        return { ...DEFAULT_FALLBACK, ...JSON.parse(saved) };
+      } catch (e) {
+        return DEFAULT_FALLBACK as EmployeePermissions;
+      }
+    }
+    return DEFAULT_FALLBACK as EmployeePermissions;
+  })();
+
+  const isPrintPermitted = !!currentPermissions.printFiltered;
+  const isPDFPermitted = !!currentPermissions.exportFilteredPDF;
 
   // Filter-specific statistics calculations
   const totalReceipts = vouchers
@@ -128,7 +203,13 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
             
             <button
               onClick={handlePrint}
-              className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-sm hover:opacity-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              disabled={!isPrintPermitted}
+              title={!isPrintPermitted ? "غير مصرح لك بهذا الإجراء." : "طباعة التقرير"}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                !isPrintPermitted 
+                  ? 'bg-emerald-650/40 text-emerald-200/60 cursor-not-allowed opacity-50' 
+                  : 'bg-emerald-600 text-white shadow-sm hover:opacity-95'
+              }`}
             >
               <Printer className="w-4 h-4" />
               طباعة التقرير
@@ -136,8 +217,13 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
 
             <button
               onClick={handleExportPDF}
-              disabled={isExporting}
-              className="px-5 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-sm hover:opacity-95 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-70"
+              disabled={isExporting || !isPDFPermitted}
+              title={!isPDFPermitted ? "غير مصرح لك بهذا الإجراء." : "تصدير كـ PDF"}
+              className={`px-5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                !isPDFPermitted 
+                  ? 'bg-blue-650/40 text-blue-200/60 cursor-not-allowed opacity-50' 
+                  : 'bg-blue-600 text-white shadow-sm hover:opacity-95'
+              }`}
             >
               {isExporting ? (
                 <>

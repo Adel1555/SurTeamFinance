@@ -5,10 +5,37 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { DatabaseService } from './db';
-import { Voucher, VisualIdentity } from './types';
-import { formatOMR, isVersionNewer } from './utils';
+import { Voucher, VisualIdentity, EmployeePermissions } from './types';
+import { formatOMR, isVersionNewer, hashPassword } from './utils';
 import packageJson from '../package.json';
 import { AttachmentStorageService } from './components/AttachmentStorageService';
+
+const DEFAULT_PERMISSIONS: EmployeePermissions = {
+  createReceipt: true,
+  createPayment: true,
+  viewRecords: true,
+  viewVoucher: true,
+  printVoucher: true,
+  exportVoucherPDF: true,
+  editReceipt: false,
+  editPayment: false,
+  deleteReceipt: false,
+  deletePayment: false,
+  viewAttachments: true,
+  addAttachments: true,
+  deleteAttachments: false,
+  viewArchive: false,
+  printFiltered: false,
+  exportFilteredPDF: false,
+  accessSettings: false,
+  changeIdentity: false,
+  exportBackup: false,
+  importBackup: false,
+  resetSystem: false,
+  viewDashboard: false,
+  checkUpdates: false,
+  managePermissions: false
+};
 
 // Components imports styled perfectly
 import Clock from './components/Clock';
@@ -41,7 +68,11 @@ import {
   Settings2,
   Lock,
   Sparkles,
-  Trash2
+  Trash2,
+  ShieldCheck,
+  ShieldAlert,
+  KeyRound,
+  Unlock
 } from 'lucide-react';
 
 type TabType = 'dashboard' | 'receipt' | 'payment' | 'archive' | 'reports' | 'visual' | 'settings';
@@ -73,9 +104,48 @@ export default function App() {
   // Voucher edit selector
   const [voucherToEdit, setVoucherToEdit] = useState<Voucher | null>(null);
 
+  // Permission error message state for programmatic gates
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+
+  const triggerPermissionError = (msg = "ليس لديك صلاحية تنفيذ هذا الإجراء.") => {
+    setPermissionError(msg);
+  };
+
+  // Auto-dismiss the permission alert after 3 seconds
+  React.useEffect(() => {
+    if (permissionError) {
+      const timer = setTimeout(() => {
+        setPermissionError(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [permissionError]);
+
   const handleEditVoucher = (voucher: Voucher) => {
+    const isReceipt = voucher.type === 'receipt';
+    const isPermitted = isReceipt ? currentPermissions.editReceipt : currentPermissions.editPayment;
+    if (!isPermitted) {
+      triggerPermissionError("ليس لديك صلاحية تنفيذ هذا الإجراء.");
+      return;
+    }
     setVoucherToEdit(voucher);
     setActiveTab(voucher.type === 'receipt' ? 'receipt' : 'payment');
+  };
+
+  const handleViewVoucher = (voucher: Voucher) => {
+    if (!currentPermissions.viewVoucher) {
+      triggerPermissionError("ليس لديك صلاحية تنفيذ هذا الإجراء.");
+      return;
+    }
+    setViewTargetVoucher(voucher);
+  };
+
+  const handlePrintVoucherTrigger = (voucher: Voucher) => {
+    if (!currentPermissions.printVoucher && !currentPermissions.exportVoucherPDF) {
+      triggerPermissionError("ليس لديك صلاحية تنفيذ هذا الإجراء.");
+      return;
+    }
+    setPrintTargetVoucher(voucher);
   };
 
   // Pending delete voucher state (with attachments check)
@@ -110,6 +180,138 @@ export default function App() {
       console.error(e);
     }
   }, [isDarkMode]);
+
+  // Financial Manager Mode states
+  const [isManagerMode, setIsManagerMode] = useState<boolean>(false);
+
+  // Permissions loading and tab validation
+  const currentPermissions = useMemo<EmployeePermissions>(() => {
+    if (isManagerMode) {
+      // In Manager Mode, all permissions are true
+      const allTrue: any = {};
+      Object.keys(DEFAULT_PERMISSIONS).forEach(k => {
+        allTrue[k] = true;
+      });
+      return allTrue as EmployeePermissions;
+    }
+    const saved = localStorage.getItem('sur_employee_permissions');
+    if (saved) {
+      try {
+        return { ...DEFAULT_PERMISSIONS, ...JSON.parse(saved) };
+      } catch (e) {
+        return DEFAULT_PERMISSIONS;
+      }
+    }
+    return DEFAULT_PERMISSIONS;
+  }, [isManagerMode, refreshKey]);
+
+  const isTabPermitted = (tab: TabType): boolean => {
+    if (isManagerMode) return true;
+    switch (tab) {
+      case 'dashboard':
+        return !!currentPermissions.viewDashboard;
+      case 'receipt':
+        return !!currentPermissions.createReceipt;
+      case 'payment':
+        return !!currentPermissions.createPayment;
+      case 'archive':
+        return !!currentPermissions.viewArchive || !!currentPermissions.viewRecords;
+      case 'reports':
+        return !!currentPermissions.viewArchive || !!currentPermissions.viewRecords;
+      case 'visual':
+        return !!currentPermissions.changeIdentity;
+      case 'settings':
+        return !!currentPermissions.accessSettings;
+      default:
+        return true;
+    }
+  };
+
+  const permittedTabs = useMemo<TabType[]>(() => {
+    const tabs: TabType[] = ['dashboard', 'receipt', 'payment', 'archive', 'reports', 'visual', 'settings'];
+    return tabs.filter(t => isTabPermitted(t));
+  }, [currentPermissions, isManagerMode]);
+
+  // Effect to automatically switch tab if current active tab becomes unavailable
+  useEffect(() => {
+    if (!isTabPermitted(activeTab)) {
+      if (permittedTabs.length > 0) {
+        setActiveTab(permittedTabs[0]);
+      }
+    }
+  }, [permittedTabs, activeTab]);
+  const [showPasswordSetupModal, setShowPasswordSetupModal] = useState<boolean>(false);
+  const [showPasswordLoginModal, setShowPasswordLoginModal] = useState<boolean>(false);
+  const [passwordInput, setPasswordInput] = useState<string>('');
+  const [passwordConfirmInput, setPasswordConfirmInput] = useState<string>('');
+  const [modalError, setModalError] = useState<string>('');
+
+  const handleLoginClick = () => {
+    setModalError('');
+    setPasswordInput('');
+    setPasswordConfirmInput('');
+    const hasPassword = !!localStorage.getItem('sur_finance_manager_hash');
+    if (hasPassword) {
+      setShowPasswordLoginModal(true);
+    } else {
+      setShowPasswordSetupModal(true);
+    }
+  };
+
+  const handleSetupPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setModalError('');
+    if (!passwordInput) {
+      setModalError('الرجاء إدخال كلمة المرور.');
+      return;
+    }
+    if (passwordInput.length < 4) {
+      setModalError('يجب أن تكون كلمة المرور مكونة من 4 خانات على الأقل.');
+      return;
+    }
+    if (passwordInput !== passwordConfirmInput) {
+      setModalError('كلمة المرور وتأكيدها غير متطابقين.');
+      return;
+    }
+
+    try {
+      const hashed = await hashPassword(passwordInput);
+      localStorage.setItem('sur_finance_manager_hash', hashed);
+      setIsManagerMode(true);
+      setShowPasswordSetupModal(false);
+      setPasswordInput('');
+      setPasswordConfirmInput('');
+    } catch (err) {
+      setModalError('حدث خطأ أثناء تشفير كلمة المرور.');
+    }
+  };
+
+  const handleLoginPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setModalError('');
+    if (!passwordInput) {
+      setModalError('الرجاء إدخال كلمة المرور لدخول وضع المدير.');
+      return;
+    }
+
+    try {
+      const inputHash = await hashPassword(passwordInput);
+      const savedHash = localStorage.getItem('sur_finance_manager_hash');
+      if (inputHash === savedHash) {
+        setIsManagerMode(true);
+        setShowPasswordLoginModal(false);
+        setPasswordInput('');
+      } else {
+        setModalError('كلمة المرور غير صحيحة، يرجى المحاولة مرة أخرى.');
+      }
+    } catch (err) {
+      setModalError('حدث خطأ أثناء التحقق من كلمة المرور.');
+    }
+  };
+
+  const handleLogoutManager = () => {
+    setIsManagerMode(false);
+  };
 
   const handleToggleDarkMode = () => {
     const nextDark = !isDarkMode;
@@ -199,7 +401,14 @@ export default function App() {
 
   const handleDeleteVoucher = (id: string) => {
     const voucher = DatabaseService.getVouchers().find(v => v.id === id);
-    if (voucher && voucher.attachments && voucher.attachments.length > 0) {
+    if (!voucher) return;
+    const isReceipt = voucher.type === 'receipt';
+    const isPermitted = isReceipt ? currentPermissions.deleteReceipt : currentPermissions.deletePayment;
+    if (!isPermitted) {
+      triggerPermissionError("ليس لديك صلاحية تنفيذ هذا الإجراء.");
+      return;
+    }
+    if (voucher.attachments && voucher.attachments.length > 0) {
       setPendingDeleteVoucher(voucher);
     } else {
       DatabaseService.deleteVoucher(id);
@@ -554,6 +763,42 @@ export default function App() {
             
             <div className="h-6 w-px bg-gray-200 dark:bg-zinc-800 mx-1" />
 
+            {/* Application Mode UI Indicator & Switch buttons */}
+            <div className="flex items-center gap-2">
+              {isManagerMode ? (
+                <div className="flex items-center gap-1.5 flex-row-reverse">
+                  <span className="text-[11px] font-black bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 dark:border-amber-500/30 px-3 py-1.5 rounded-xl flex items-center gap-1 font-sans shadow-sm">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>وضع المدير المالي</span>
+                  </span>
+                  <button
+                    onClick={handleLogoutManager}
+                    className="p-1 px-3 py-1.5 rounded-xl text-xs font-black text-rose-600 dark:text-rose-450 hover:bg-rose-500/10 border border-rose-500/25 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                  >
+                    <Unlock className="w-3.5 h-3.5" />
+                    <span>خروج</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 flex-row-reverse">
+                  <span className="text-[11px] font-bold bg-gray-100/70 dark:bg-zinc-900/60 text-gray-500 dark:text-zinc-400 border border-gray-200/50 dark:border-zinc-800/40 px-3 py-1.5 rounded-xl flex items-center gap-1 font-sans">
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    <span>وضع الموظف</span>
+                  </span>
+                  <button
+                    onClick={handleLoginClick}
+                    className="p-1 px-3 py-1.5 rounded-xl text-xs font-black bg-[var(--primary-color)] hover:opacity-90 text-white transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                    style={{ backgroundColor: identity.primaryColor }}
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>دخول المدير</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="h-6 w-px bg-gray-200 dark:bg-zinc-800 mx-1" />
+
             {/* Refresh action */}
             <button
               onClick={handleManualRefresh}
@@ -625,173 +870,187 @@ export default function App() {
             <div className="flex flex-col gap-1.5 text-right">
               
               {/* Tab 1: Dashboard */}
-              <button
-                onClick={() => setActiveTab('dashboard')}
-                className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
-                  activeTab === 'dashboard' 
-                    ? 'shadow-md font-extrabold' 
-                    : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
-                }`}
-                style={activeTab === 'dashboard' ? { 
-                  backgroundColor: 'var(--sidebar-active)',
-                  color: 'var(--button-text)',
-                  boxShadow: '0 4.5px 14px var(--card-glow)'
-                } : {
-                  color: 'var(--sidebar-text)'
-                }}
-              >
-                <div className="flex items-center gap-2 flex-row-reverse">
-                  <BarChart3 className="w-4 h-4" />
-                  <span>الواجهة الرئيسية</span>
-                </div>
-                <span className="text-[10px] font-mono opacity-80" style={{ color: activeTab === 'dashboard' ? 'var(--button-text)' : 'var(--text-secondary)' }}>{vouchers.length}</span>
-              </button>
-
+              {isTabPermitted('dashboard') && (
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
+                    activeTab === 'dashboard' 
+                      ? 'shadow-md font-extrabold' 
+                      : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
+                  }`}
+                  style={activeTab === 'dashboard' ? { 
+                    backgroundColor: 'var(--sidebar-active)',
+                    color: 'var(--button-text)',
+                    boxShadow: '0 4.5px 14px var(--card-glow)'
+                  } : {
+                    color: 'var(--sidebar-text)'
+                  }}
+                >
+                  <div className="flex items-center gap-2 flex-row-reverse">
+                    <BarChart3 className="w-4 h-4" />
+                    <span>الواجهة الرئيسية</span>
+                  </div>
+                  <span className="text-[10px] font-mono opacity-80" style={{ color: activeTab === 'dashboard' ? 'var(--button-text)' : 'var(--text-secondary)' }}>{vouchers.length}</span>
+                </button>
+              )}
+ 
               {/* Tab 2: New Receipt */}
-              <button
-                onClick={() => {
-                  setVoucherToEdit(null);
-                  setActiveTab('receipt');
-                }}
-                className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
-                  activeTab === 'receipt' 
-                    ? 'shadow-md font-extrabold' 
-                    : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
-                }`}
-                style={activeTab === 'receipt' ? { 
-                  backgroundColor: 'var(--sidebar-active)',
-                  color: 'var(--button-text)',
-                  boxShadow: '0 4.5px 14px var(--card-glow)'
-                } : {
-                  color: 'var(--sidebar-text)'
-                }}
-              >
-                <div className="flex items-center gap-2 flex-row-reverse">
-                  <PlusCircle className="w-4 h-4 text-emerald-500" />
-                  <span>{identity.receiptTerm}</span>
-                </div>
-                <span className="text-[9px] bg-emerald-500/15 text-emerald-600 px-1.5 py-0.5 rounded font-black">جديد</span>
-              </button>
-
+              {isTabPermitted('receipt') && (
+                <button
+                  onClick={() => {
+                    setVoucherToEdit(null);
+                    setActiveTab('receipt');
+                  }}
+                  className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
+                    activeTab === 'receipt' 
+                      ? 'shadow-md font-extrabold' 
+                      : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
+                  }`}
+                  style={activeTab === 'receipt' ? { 
+                    backgroundColor: 'var(--sidebar-active)',
+                    color: 'var(--button-text)',
+                    boxShadow: '0 4.5px 14px var(--card-glow)'
+                  } : {
+                    color: 'var(--sidebar-text)'
+                  }}
+                >
+                  <div className="flex items-center gap-2 flex-row-reverse">
+                    <PlusCircle className="w-4 h-4 text-emerald-500" />
+                    <span>{identity.receiptTerm}</span>
+                  </div>
+                  <span className="text-[9px] bg-emerald-500/15 text-emerald-600 px-1.5 py-0.5 rounded font-black">جديد</span>
+                </button>
+              )}
+ 
               {/* Tab 3: New Payment */}
-              <button
-                onClick={() => {
-                  setVoucherToEdit(null);
-                  setActiveTab('payment');
-                }}
-                className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
-                  activeTab === 'payment' 
-                    ? 'shadow-md font-extrabold' 
-                    : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
-                }`}
-                style={activeTab === 'payment' ? { 
-                  backgroundColor: 'var(--sidebar-active)',
-                  color: 'var(--button-text)',
-                  boxShadow: '0 4.5px 14px var(--card-glow)'
-                } : {
-                  color: 'var(--sidebar-text)'
-                }}
-              >
-                <div className="flex items-center gap-2 flex-row-reverse">
-                  <MinusCircle className="w-4 h-4 text-rose-500" />
-                  <span>{identity.paymentTerm}</span>
-                </div>
-                <span className="text-[9px] bg-rose-500/15 text-rose-600 px-1.5 py-0.5 rounded font-black">صرف</span>
-              </button>
-
+              {isTabPermitted('payment') && (
+                <button
+                  onClick={() => {
+                    setVoucherToEdit(null);
+                    setActiveTab('payment');
+                  }}
+                  className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
+                    activeTab === 'payment' 
+                      ? 'shadow-md font-extrabold' 
+                      : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
+                  }`}
+                  style={activeTab === 'payment' ? { 
+                    backgroundColor: 'var(--sidebar-active)',
+                    color: 'var(--button-text)',
+                    boxShadow: '0 4.5px 14px var(--card-glow)'
+                  } : {
+                    color: 'var(--sidebar-text)'
+                  }}
+                >
+                  <div className="flex items-center gap-2 flex-row-reverse">
+                    <MinusCircle className="w-4 h-4 text-rose-500" />
+                    <span>{identity.paymentTerm}</span>
+                  </div>
+                  <span className="text-[9px] bg-rose-500/15 text-rose-600 px-1.5 py-0.5 rounded font-black">صرف</span>
+                </button>
+              )}
+ 
               {/* Tab 4: Archive */}
-              <button
-                onClick={() => setActiveTab('archive')}
-                className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
-                  activeTab === 'archive' 
-                    ? 'shadow-md font-extrabold' 
-                    : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
-                }`}
-                style={activeTab === 'archive' ? { 
-                  backgroundColor: 'var(--sidebar-active)',
-                  color: 'var(--button-text)',
-                  boxShadow: '0 4.5px 14px var(--card-glow)'
-                } : {
-                  color: 'var(--sidebar-text)'
-                }}
-              >
-                <div className="flex items-center gap-2 flex-row-reverse">
-                  <Archive className="w-4 h-4" />
-                  <span>الأرشيف والسجلات</span>
-                </div>
-                <span className="text-[10px] font-mono opacity-65" style={{ color: activeTab === 'archive' ? 'var(--button-text)' : 'var(--text-secondary)' }}>بحث</span>
-              </button>
-
+              {isTabPermitted('archive') && (
+                <button
+                  onClick={() => setActiveTab('archive')}
+                  className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
+                    activeTab === 'archive' 
+                      ? 'shadow-md font-extrabold' 
+                      : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
+                  }`}
+                  style={activeTab === 'archive' ? { 
+                    backgroundColor: 'var(--sidebar-active)',
+                    color: 'var(--button-text)',
+                    boxShadow: '0 4.5px 14px var(--card-glow)'
+                  } : {
+                    color: 'var(--sidebar-text)'
+                  }}
+                >
+                  <div className="flex items-center gap-2 flex-row-reverse">
+                    <Archive className="w-4 h-4" />
+                    <span>الأرشيف والسجلات</span>
+                  </div>
+                  <span className="text-[10px] font-mono opacity-65" style={{ color: activeTab === 'archive' ? 'var(--button-text)' : 'var(--text-secondary)' }}>بحث</span>
+                </button>
+              )}
+ 
               {/* Tab 5: Reports */}
-              <button
-                onClick={() => setActiveTab('reports')}
-                className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
-                  activeTab === 'reports' 
-                    ? 'shadow-md font-extrabold' 
-                    : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
-                }`}
-                style={activeTab === 'reports' ? { 
-                  backgroundColor: 'var(--sidebar-active)',
-                  color: 'var(--button-text)',
-                  boxShadow: '0 4.5px 14px var(--card-glow)'
-                } : {
-                  color: 'var(--sidebar-text)'
-                }}
-              >
-                <div className="flex items-center gap-2 flex-row-reverse">
-                  <BarChart3 className="w-4 h-4" />
-                  <span>التقارير الربعية</span>
-                </div>
-                <span className="text-[10px] opacity-65" style={{ color: activeTab === 'reports' ? 'var(--button-text)' : 'var(--text-secondary)' }}>مفصل</span>
-              </button>
-
+              {isTabPermitted('reports') && (
+                <button
+                  onClick={() => setActiveTab('reports')}
+                  className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
+                    activeTab === 'reports' 
+                      ? 'shadow-md font-extrabold' 
+                      : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
+                  }`}
+                  style={activeTab === 'reports' ? { 
+                    backgroundColor: 'var(--sidebar-active)',
+                    color: 'var(--button-text)',
+                    boxShadow: '0 4.5px 14px var(--card-glow)'
+                  } : {
+                    color: 'var(--sidebar-text)'
+                  }}
+                >
+                  <div className="flex items-center gap-2 flex-row-reverse">
+                    <BarChart3 className="w-4 h-4" />
+                    <span>التقارير الربعية</span>
+                  </div>
+                  <span className="text-[10px] opacity-65" style={{ color: activeTab === 'reports' ? 'var(--button-text)' : 'var(--text-secondary)' }}>مفصل</span>
+                </button>
+              )}
+ 
               {/* Tab 6: Flexible Visual Identity */}
-              <button
-                onClick={() => setActiveTab('visual')}
-                className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
-                  activeTab === 'visual' 
-                    ? 'shadow-md font-extrabold' 
-                    : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
-                }`}
-                style={activeTab === 'visual' ? { 
-                  backgroundColor: 'var(--sidebar-active)',
-                  color: 'var(--button-text)',
-                  boxShadow: '0 4.5px 14px var(--card-glow)'
-                } : {
-                  color: 'var(--sidebar-text)'
-                }}
-              >
-                <div className="flex items-center gap-2 flex-row-reverse">
-                  <SlidersHorizontal className="w-4 h-4 text-amber-500 animate-pulse" />
-                  <span>الهوية البصرية المرنة</span>
-                </div>
-                <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              </button>
-
+              {isTabPermitted('visual') && (
+                <button
+                  onClick={() => setActiveTab('visual')}
+                  className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
+                    activeTab === 'visual' 
+                      ? 'shadow-md font-extrabold' 
+                      : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
+                  }`}
+                  style={activeTab === 'visual' ? { 
+                    backgroundColor: 'var(--sidebar-active)',
+                    color: 'var(--button-text)',
+                    boxShadow: '0 4.5px 14px var(--card-glow)'
+                  } : {
+                    color: 'var(--sidebar-text)'
+                  }}
+                >
+                  <div className="flex items-center gap-2 flex-row-reverse">
+                    <SlidersHorizontal className="w-4 h-4 text-amber-500 animate-pulse" />
+                    <span>الهوية البصرية المرنة</span>
+                  </div>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                </button>
+              )}
+ 
               <div className="border-t border-gray-100 dark:border-zinc-800/80 pt-1.5 mt-1.5" style={{ borderColor: 'var(--frame-border)' }} />
-
+ 
               {/* Tab 7: Settings */}
-              <button
-                onClick={() => setActiveTab('settings')}
-                className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
-                  activeTab === 'settings' 
-                    ? 'shadow-md font-extrabold' 
-                    : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
-                }`}
-                style={activeTab === 'settings' ? { 
-                  backgroundColor: 'var(--sidebar-active)',
-                  color: 'var(--button-text)',
-                  boxShadow: '0 4.5px 14px var(--card-glow)'
-                } : {
-                  color: 'var(--sidebar-text)'
-                }}
-              >
-                <div className="flex items-center gap-2 flex-row-reverse">
-                  <Settings2 className="w-4 h-4" />
-                  <span>قسم الإعدادات</span>
-                </div>
-              </button>
-
+              {isTabPermitted('settings') && (
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
+                    activeTab === 'settings' 
+                      ? 'shadow-md font-extrabold' 
+                      : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
+                  }`}
+                  style={activeTab === 'settings' ? { 
+                    backgroundColor: 'var(--sidebar-active)',
+                    color: 'var(--button-text)',
+                    boxShadow: '0 4.5px 14px var(--card-glow)'
+                  } : {
+                    color: 'var(--sidebar-text)'
+                  }}
+                >
+                  <div className="flex items-center gap-2 flex-row-reverse">
+                    <Settings2 className="w-4 h-4" />
+                    <span>قسم الإعدادات</span>
+                  </div>
+                </button>
+              )}
+ 
             </div>
 
           </div>
@@ -823,7 +1082,17 @@ export default function App() {
         {/* Dynamic Display Area */}
         <section className="lg:col-span-9 space-y-6 print:col-span-12">
           
-          {activeTab === 'dashboard' && (
+          {permittedTabs.length === 0 ? (
+            <div className={`p-8 ${cardStyleClass} ${containerRadius} border border-rose-100 dark:border-rose-500/20 bg-white/95 dark:bg-[#0c203b]/90 shadow-md text-center flex flex-col items-center justify-center space-y-4 py-16 animate-fade-in`}>
+              <div className="p-4 rounded-full bg-rose-500/10 text-rose-500">
+                <ShieldAlert className="w-12 h-12" />
+              </div>
+              <h2 className="text-lg font-black text-rose-600 dark:text-rose-450">لا توجد لديك صلاحيات مفعّلة</h2>
+              <p className="text-sm font-bold text-gray-500 dark:text-gray-300 font-sans">يرجى التواصل مع المدير المالي.</p>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'dashboard' && isTabPermitted('dashboard') && (
             <div className="space-y-6 animate-fade-in print:hidden">
               
               {/* Four Readings Financial Cards */}
@@ -916,9 +1185,11 @@ export default function App() {
                 vouchers={vouchers}
                 identity={identity}
                 onDeleteVoucher={handleDeleteVoucher}
-                onPrintVoucher={(v) => setPrintTargetVoucher(v)}
-                onViewVoucher={(v) => setViewTargetVoucher(v)}
+                onPrintVoucher={handlePrintVoucherTrigger}
+                onViewVoucher={handleViewVoucher}
                 onEditVoucher={handleEditVoucher}
+                permissions={currentPermissions}
+                isManagerMode={isManagerMode}
               />
 
               {/* Help tip helper */}
@@ -944,7 +1215,7 @@ export default function App() {
           )}
 
           {/* Tab Views content controller */}
-          {activeTab === 'receipt' && (
+          {activeTab === 'receipt' && isTabPermitted('receipt') && (
             <div className="animate-fade-in print:hidden">
               <ReceiptVoucherForm
                 identity={identity}
@@ -963,7 +1234,7 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'payment' && (
+          {activeTab === 'payment' && isTabPermitted('payment') && (
             <div className="animate-fade-in print:hidden">
               <PaymentVoucherForm
                 identity={identity}
@@ -982,20 +1253,22 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'archive' && (
+          {activeTab === 'archive' && isTabPermitted('archive') && (
             <div className="animate-fade-in print:hidden">
               <ArchivePanel
                 vouchers={vouchers}
                 identity={identity}
                 onDeleteVoucher={handleDeleteVoucher}
-                onPrintVoucher={(v) => setPrintTargetVoucher(v)}
-                onViewVoucher={(v) => setViewTargetVoucher(v)}
+                onPrintVoucher={handlePrintVoucherTrigger}
+                onViewVoucher={handleViewVoucher}
                 onEditVoucher={handleEditVoucher}
+                permissions={currentPermissions}
+                isManagerMode={isManagerMode}
               />
             </div>
           )}
 
-          {activeTab === 'reports' && (
+          {activeTab === 'reports' && isTabPermitted('reports') && (
             <div className="animate-fade-in">
               <QuarterlyReports
                 vouchers={vouchers}
@@ -1004,7 +1277,7 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'visual' && (
+          {activeTab === 'visual' && isTabPermitted('visual') && (
             <div className="animate-fade-in print:hidden">
               <VisualIdentityPanel
                 config={identity}
@@ -1013,7 +1286,7 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'settings' && (
+          {activeTab === 'settings' && isTabPermitted('settings') && (
             <div className="animate-fade-in print:hidden">
               <SettingsPanel
                 identity={identity}
@@ -1028,10 +1301,13 @@ export default function App() {
                 ignoredVersion={ignoredVersion}
                 onIgnoreVersion={handleIgnoreVersion}
                 onResetIgnoreVersion={handleResetIgnoreVersion}
+                isManagerMode={isManagerMode}
               />
             </div>
           )}
 
+            </>
+          )}
         </section>
 
       </main>
@@ -1042,6 +1318,8 @@ export default function App() {
           voucher={printTargetVoucher}
           identity={identity}
           onClose={() => setPrintTargetVoucher(null)}
+          permissions={currentPermissions}
+          isManagerMode={isManagerMode}
         />
       )}
 
@@ -1051,8 +1329,10 @@ export default function App() {
           voucher={viewTargetVoucher}
           identity={identity}
           onClose={() => setViewTargetVoucher(null)}
-          onPrint={(v) => setPrintTargetVoucher(v)}
+          onPrint={handlePrintVoucherTrigger}
           onEdit={handleEditVoucher}
+          permissions={currentPermissions}
+          isManagerMode={isManagerMode}
         />
       )}
 
@@ -1100,6 +1380,156 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Password Setup Modal (Create Manager Password) */}
+      {showPasswordSetupModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in print:hidden" dir="rtl">
+          <div className="bg-white dark:bg-[#0c203b] border border-blue-100 dark:border-blue-900/40 rounded-2xl max-w-md w-full p-6 text-right shadow-2xl space-y-4">
+            <div className="flex items-start gap-3 flex-row-reverse">
+              <div className="p-3 bg-blue-500/10 text-blue-600 rounded-xl shrink-0">
+                <KeyRound className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-gray-900 dark:text-white">
+                  إعداد كلمة مرور المدير المالي
+                </h3>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                  لم يتم ضبط كلمة مرور للمدير المالي بعد. يرجى إعداد كلمة مرور آمنة الآن لحماية الصلاحيات وإدارة النظام المالي بشكل كامل.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSetupPasswordSubmit} className="space-y-3.5 pt-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 block">كلمة المرور الجديدة</label>
+                <input
+                  id="setup-manager-password-input"
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="أدخل كلمة المرور الجديدة"
+                  className="w-full p-2.5 rounded-xl text-xs border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/40 outline-none focus:border-[var(--primary-color)] transition-colors text-right"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 block">تأكيد كلمة المرور</label>
+                <input
+                  id="setup-manager-password-confirm"
+                  type="password"
+                  value={passwordConfirmInput}
+                  onChange={(e) => setPasswordConfirmInput(e.target.value)}
+                  placeholder="أعد إدخال كلمة المرور للتأكيد"
+                  className="w-full p-2.5 rounded-xl text-xs border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/40 outline-none focus:border-[var(--primary-color)] transition-colors text-right"
+                />
+              </div>
+
+              {modalError && (
+                <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2 rounded-lg text-right">
+                  ⚠️ {modalError}
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm transition-all cursor-pointer text-center"
+                >
+                  حفظ وتفعيل وضع المدير
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordSetupModal(false)}
+                  className="py-2.5 px-4 bg-gray-100 dark:bg-zinc-850 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Password Login Modal (Enter Manager Password) */}
+      {showPasswordLoginModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in print:hidden" dir="rtl">
+          <div className="bg-white dark:bg-[#0c203b] border border-blue-100 dark:border-blue-900/40 rounded-2xl max-w-md w-full p-6 text-right shadow-2xl space-y-4">
+            <div className="flex items-start gap-3 flex-row-reverse">
+              <div className="p-3 bg-amber-500/10 text-amber-600 rounded-xl shrink-0">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-gray-900 dark:text-white">
+                  التحقق من هوية المدير المالي
+                </h3>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                  الرجاء إدخال كلمة مرور المدير المالي للوصول إلى الصلاحيات الكاملة والأقسام المخصصة للإدارة.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleLoginPasswordSubmit} className="space-y-3.5 pt-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 block">كلمة المرور</label>
+                <input
+                  id="login-manager-password-input"
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="أدخل كلمة مرور المدير المالي"
+                  className="w-full p-2.5 rounded-xl text-xs border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/40 outline-none focus:border-[var(--primary-color)] transition-colors text-right"
+                  autoFocus
+                />
+              </div>
+
+              {modalError && (
+                <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2 rounded-lg text-right animate-pulse">
+                  ⚠️ {modalError}
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black shadow-sm transition-all cursor-pointer text-center"
+                >
+                  تأكيد الدخول
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordLoginModal(false)}
+                  className="py-2.5 px-4 bg-gray-150 dark:bg-zinc-850 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Permission Error Toast Overlay */}
+      {permissionError && (
+        <div className="fixed bottom-6 left-6 right-6 md:left-auto md:max-w-md bg-white dark:bg-[#0f2444] border-2 border-rose-500/80 rounded-2xl p-4 shadow-2xl z-50 animate-bounce flex items-center justify-between gap-3 text-right flex-row-reverse" dir="rtl">
+          <div className="flex items-center gap-3 flex-row-reverse">
+            <div className="p-2 bg-rose-500/10 text-rose-500 rounded-lg shrink-0">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-black text-rose-600 dark:text-rose-400">تحذير أمني</p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-300 font-bold">{permissionError}</p>
+            </div>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setPermissionError(null)}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-white text-xs font-bold px-2 py-1 rounded hover:bg-gray-150 dark:hover:bg-zinc-800 transition-all cursor-pointer"
+          >
+            إغلاق
+          </button>
         </div>
       )}
 

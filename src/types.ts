@@ -103,3 +103,30 @@ export interface YearlyArchive {
   expenseCount: number;
   createdAt: number;
 }
+
+export interface EmployeePermissions {
+  createReceipt: boolean;        // إنشاء سند قبض
+  createPayment: boolean;        // إنشاء سند صرف
+  viewRecords: boolean;          // عرض السجلات
+  viewVoucher: boolean;          // عرض السند
+  printVoucher: boolean;         // طباعة السند
+  exportVoucherPDF: boolean;     // تصدير السند PDF
+  editReceipt: boolean;          // تعديل سند قبض
+  editPayment: boolean;          // تعديل سند صرف
+  deleteReceipt: boolean;        // حذف سند قبض
+  deletePayment: boolean;        // حذف سند صرف
+  viewAttachments: boolean;      // عرض المرفقات
+  addAttachments: boolean;       // إضافة المرفقات
+  deleteAttachments: boolean;    // حذف المرفقات
+  viewArchive: boolean;          // عرض الأرشيف
+  printFiltered: boolean;        // طباعة النتائج المفلترة
+  exportFilteredPDF: boolean;    // تصدير النتائج المفلترة PDF
+  accessSettings: boolean;       // الوصول إلى الإعدادات
+  changeIdentity: boolean;       // تغيير الهوية البصرية
+  exportBackup: boolean;         // تصدير نسخة احتياطية
+  importBackup: boolean;         // استيراد نسخة احتياطية
+  resetSystem: boolean;          // تصفير النظام
+  viewDashboard: boolean;        // عرض لوحة التحكم
+  checkUpdates: boolean;         // التحقق من التحديثات
+  managePermissions: boolean;    // إدارة الصلاحيات
+}

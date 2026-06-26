@@ -264,4 +264,15 @@ export async function withOklchWorkaround<T>(
   }
 }
 
+/**
+ * Hash a password using SHA-256 via Web Crypto API with a secure salt
+ */
+export async function hashPassword(password: string): Promise<string> {
+  const msgBuffer = new TextEncoder().encode(password + "sur_volunteer_salt_2026");
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+
 
