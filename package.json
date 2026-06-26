@@ -55,7 +55,6 @@
     "win": {
       "target": "nsis",
       "artifactName": "AlKhazina_Setup_v${version}.${ext}"
-      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
