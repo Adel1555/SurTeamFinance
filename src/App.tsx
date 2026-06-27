@@ -246,6 +246,54 @@ export default function App() {
   const [passwordConfirmInput, setPasswordConfirmInput] = useState<string>('');
   const [modalError, setModalError] = useState<string>('');
 
+  // Emergency Password Reset State
+  const [showEmergencyResetModal, setShowEmergencyResetModal] = useState<boolean>(false);
+  const [emergencyCodeInput, setEmergencyCodeInput] = useState<string>('');
+  const [emergencyNewPassword, setEmergencyNewPassword] = useState<string>('');
+  const [emergencyConfirmPassword, setEmergencyConfirmPassword] = useState<string>('');
+  const [emergencyError, setEmergencyError] = useState<string | null>(null);
+  const [emergencySuccess, setEmergencySuccess] = useState<string | null>(null);
+
+  const handleEmergencyResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmergencyError(null);
+    setEmergencySuccess(null);
+
+    if (emergencyCodeInput !== 'AKH-RESET-2026-SUR') {
+      setEmergencyError('كود الطوارئ غير صحيح.');
+      return;
+    }
+
+    if (!emergencyNewPassword || emergencyNewPassword.length < 4) {
+      setEmergencyError('يرجى إدخال كلمة مرور صالحة.');
+      return;
+    }
+
+    if (emergencyNewPassword !== emergencyConfirmPassword) {
+      setEmergencyError('كلمتا المرور غير متطابقتين.');
+      return;
+    }
+
+    try {
+      const hashed = await hashPassword(emergencyNewPassword);
+      localStorage.setItem('sur_finance_manager_hash', hashed);
+      setEmergencySuccess('تمت إعادة تعيين كلمة مرور المدير المالي بنجاح. يرجى تسجيل الدخول من جديد.');
+      
+      // Clear inputs
+      setEmergencyCodeInput('');
+      setEmergencyNewPassword('');
+      setEmergencyConfirmPassword('');
+
+      // Auto-dismiss or allow manually dismissing
+      setTimeout(() => {
+        setShowEmergencyResetModal(false);
+        setEmergencySuccess(null);
+      }, 3500);
+    } catch (err) {
+      setEmergencyError('حدث خطأ أثناء تشفير كلمة المرور.');
+    }
+  };
+
   const handleLoginClick = () => {
     setModalError('');
     setPasswordInput('');
@@ -1473,7 +1521,24 @@ export default function App() {
 
             <form onSubmit={handleLoginPasswordSubmit} className="space-y-3.5 pt-2">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 block">كلمة المرور</label>
+                <div className="flex justify-between items-center mb-1 flex-row-reverse">
+                  <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 block">كلمة المرور</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordLoginModal(false);
+                      setEmergencyCodeInput('');
+                      setEmergencyNewPassword('');
+                      setEmergencyConfirmPassword('');
+                      setEmergencyError(null);
+                      setEmergencySuccess(null);
+                      setShowEmergencyResetModal(true);
+                    }}
+                    className="text-[10px] font-black text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 cursor-pointer underline hover:no-underline"
+                  >
+                    نسيت كلمة المرور؟
+                  </button>
+                </div>
                 <input
                   id="login-manager-password-input"
                   type="password"
@@ -1530,6 +1595,103 @@ export default function App() {
           >
             إغلاق
           </button>
+        </div>
+      )}
+
+      {/* Emergency Password Reset Modal */}
+      {showEmergencyResetModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in print:hidden" dir="rtl">
+          <div className="bg-white dark:bg-[#0c203b] border border-red-100 dark:border-red-900/40 rounded-2xl max-w-md w-full p-6 text-right shadow-2xl space-y-4">
+            <div className="flex items-start gap-3 flex-row-reverse">
+              <div className="p-3 bg-rose-500/10 text-rose-600 rounded-xl shrink-0">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-gray-900 dark:text-white">
+                  إعادة تعيين كلمة مرور المدير المالي (مطور)
+                </h3>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                  هذا القسم مخصص للمطور لإعادة تعيين كلمة مرور المدير المالي في حالات الطوارئ وفقدان كلمة المرور.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleEmergencyResetSubmit} className="space-y-3.5 pt-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 block">كود الطوارئ</label>
+                <input
+                  id="emergency-reset-code-input"
+                  type="text"
+                  value={emergencyCodeInput}
+                  onChange={(e) => setEmergencyCodeInput(e.target.value)}
+                  placeholder="أدخل كود الطوارئ الخاص بالمطور"
+                  className="w-full p-2.5 rounded-xl text-xs border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/40 outline-none focus:border-rose-500 transition-colors text-right"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 block">كلمة المرور الجديدة</label>
+                <input
+                  id="emergency-new-password-input"
+                  type="password"
+                  value={emergencyNewPassword}
+                  onChange={(e) => setEmergencyNewPassword(e.target.value)}
+                  placeholder="أدخل كلمة المرور الجديدة"
+                  className="w-full p-2.5 rounded-xl text-xs border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/40 outline-none focus:border-rose-500 transition-colors text-right"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 block">تأكيد كلمة المرور الجديدة</label>
+                <input
+                  id="emergency-confirm-password-input"
+                  type="password"
+                  value={emergencyConfirmPassword}
+                  onChange={(e) => setEmergencyConfirmPassword(e.target.value)}
+                  placeholder="أعد إدخال كلمة المرور للتأكيد"
+                  className="w-full p-2.5 rounded-xl text-xs border border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/40 outline-none focus:border-rose-500 transition-colors text-right"
+                />
+              </div>
+
+              {emergencyError && (
+                <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2 rounded-lg text-right">
+                  ⚠️ {emergencyError}
+                </p>
+              )}
+
+              {emergencySuccess && (
+                <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-lg text-right">
+                  ✅ {emergencySuccess}
+                </p>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  id="btn-confirm-emergency-reset"
+                  type="submit"
+                  className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-sm transition-all cursor-pointer text-center"
+                >
+                  إعادة تعيين و حفظ
+                </button>
+                <button
+                  id="btn-cancel-emergency-reset"
+                  type="button"
+                  onClick={() => {
+                    setShowEmergencyResetModal(false);
+                    setEmergencyCodeInput('');
+                    setEmergencyNewPassword('');
+                    setEmergencyConfirmPassword('');
+                    setEmergencyError(null);
+                    setEmergencySuccess(null);
+                  }}
+                  className="py-2.5 px-4 bg-gray-150 dark:bg-zinc-850 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
