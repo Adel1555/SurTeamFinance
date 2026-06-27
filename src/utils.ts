@@ -187,6 +187,56 @@ export function convertOklchStringToRgb(str: string): string {
 }
 
 /**
+ * Converts Tailwind v4's modern 'oklab' color format to standard 'rgb/rgba' colors.
+ * This is a crucial workaround for libraries like html2canvas that crash upon encountering
+ * 'oklab' color functions in stylesheets or computed styles.
+ */
+export function convertOklabStringToRgb(str: string): string {
+  if (!str || typeof str !== 'string' || !str.toLowerCase().includes('oklab')) {
+    return str;
+  }
+
+  return str.replace(/oklab\(\s*([\d\.\%]+)\s+([\d\.\-\%]+)\s+([\d\.\-\%]+)(?:\s*[\/\s,]\s*([\d\.\%]+))?\s*\)/gi, (match, p1, p2, p3, p4) => {
+    try {
+      let L = p1.endsWith('%') ? parseFloat(p1) / 100 : parseFloat(p1);
+      let a = p2.endsWith('%') ? parseFloat(p2) / 100 : parseFloat(p2);
+      let b = p3.endsWith('%') ? parseFloat(p3) / 100 : parseFloat(p3);
+      let A = p4 !== undefined ? (p4.endsWith('%') ? parseFloat(p4) / 100 : parseFloat(p4)) : 1;
+
+      // Convert OKLAB to LMS
+      const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+      const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+      const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+
+      const l = l_ * l_ * l_;
+      const m = m_ * m_ * m_;
+      const s = s_ * s_ * s_;
+
+      // Convert LMS to Linear sRGB
+      let r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+      let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+      let b_ = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+
+      // Convert Linear sRGB to sRGB (gamma correction)
+      const f = (x: number) => (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
+
+      let R = Math.round(Math.max(0, Math.min(1, f(r))) * 255);
+      let G = Math.round(Math.max(0, Math.min(1, f(g))) * 255);
+      let B = Math.round(Math.max(0, Math.min(1, f(b_))) * 255);
+
+      if (A === 1) {
+        return `rgb(${R}, ${G}, ${B})`;
+      } else {
+        return `rgba(${R}, ${G}, ${B}, ${A})`;
+      }
+    } catch (e) {
+      console.error('Error parsing oklab color in patch:', e);
+      return match;
+    }
+  });
+}
+
+/**
  * Patches window.getComputedStyle temporarily to convert Tailwind v4's modern 'oklch' wide-gamut
  * color format to standard 'rgb/rgba' colors.
  * Note: We now keep this as a safe no-op because withOklchWorkaround already handles converting
@@ -205,9 +255,9 @@ export async function withOklchWorkaround<T>(
   element: HTMLElement,
   action: () => Promise<T>
 ): Promise<T> {
-  const elementsToPatch: { el: HTMLElement; originalStyle: string }[] = [];
+  const elementsToPatch: { el: HTMLElement | SVGElement; originalStyle: string }[] = [];
 
-  const traverseAndPatch = (el: HTMLElement) => {
+  const traverseAndPatch = (el: HTMLElement | SVGElement) => {
     // Save original inline styles
     elementsToPatch.push({
       el,
@@ -218,6 +268,8 @@ export async function withOklchWorkaround<T>(
     const computed = window.getComputedStyle(el);
     const colorProps = [
       'color',
+      'background',
+      'backgroundImage',
       'backgroundColor',
       'borderColor',
       'borderTopColor',
@@ -227,15 +279,26 @@ export async function withOklchWorkaround<T>(
       'boxShadow',
       'textShadow',
       'outlineColor',
+      'fill',
+      'stroke',
     ];
 
     colorProps.forEach((prop) => {
       try {
-        const val = computed[prop as any];
-        if (val && typeof val === 'string' && val.toLowerCase().includes('oklch')) {
-          const rgbVal = convertOklchStringToRgb(val);
-          // Set inline style directly to override any stylesheets
-          el.style[prop as any] = rgbVal;
+        let val = computed[prop as any];
+        if (val && typeof val === 'string') {
+          const valLower = val.toLowerCase();
+          if (valLower.includes('oklch') || valLower.includes('oklab')) {
+            let rgbVal = val;
+            if (valLower.includes('oklch')) {
+              rgbVal = convertOklchStringToRgb(rgbVal);
+            }
+            if (rgbVal.toLowerCase().includes('oklab')) {
+              rgbVal = convertOklabStringToRgb(rgbVal);
+            }
+            // Set inline style directly to override any stylesheets
+            el.style[prop as any] = rgbVal;
+          }
         }
       } catch (e) {
         // Safe fallback
@@ -245,8 +308,8 @@ export async function withOklchWorkaround<T>(
     // Recurse to children
     for (let i = 0; i < el.children.length; i++) {
       const child = el.children[i];
-      if (child instanceof HTMLElement) {
-        traverseAndPatch(child);
+      if (child instanceof HTMLElement || child instanceof SVGElement) {
+        traverseAndPatch(child as any);
       }
     }
   };

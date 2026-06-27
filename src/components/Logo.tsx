@@ -12,7 +12,22 @@ interface LogoProps {
 
 export default function Logo({ className = '', size = 40, showText = false, customLogo }: LogoProps) {
   const [hasError, setHasError] = useState(false);
-  const [logoSource, setLogoSource] = useState(defaultLogoUrl);
+  
+  // Directly initialize with the correct logo source to avoid initial load errors
+  const [logoSource, setLogoSource] = useState(() => {
+    if (customLogo) {
+      return customLogo;
+    }
+    try {
+      const visualIdentity = DatabaseService.getVisualIdentity();
+      if (visualIdentity && visualIdentity.customLogo) {
+        return visualIdentity.customLogo;
+      }
+    } catch (e) {
+      // safe fallback
+    }
+    return defaultLogoUrl;
+  });
 
   // Synchronize logo source with dynamic props or local DB configs
   useEffect(() => {

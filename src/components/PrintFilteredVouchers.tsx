@@ -108,7 +108,16 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
   const netBalance = totalReceipts - totalPayments;
 
   const handlePrint = () => {
+    const isDark = document.documentElement.classList.contains("dark");
+    if (isDark) {
+      document.documentElement.classList.remove("dark");
+    }
+
     window.print();
+
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    }
   };
 
   const handleExportPDF = async () => {
@@ -120,8 +129,14 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
       return;
     }
 
+    const isDark = document.documentElement.classList.contains("dark");
     try {
-      // 1. Ensure fonts are loaded
+      // 1. Temporarily remove dark mode class to force white background and black text
+      if (isDark) {
+        document.documentElement.classList.remove("dark");
+      }
+
+      // 2. Ensure fonts are loaded
       if (!document.getElementById("arabic-pdf-fonts")) {
         const link = document.createElement("link");
         link.id = "arabic-pdf-fonts";
@@ -138,13 +153,18 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
 
       const canvas = await withOklchWorkaround(element, async () => {
         return await html2canvas(element, {
-          scale: 2,
+          scale: 1.8, // Slightly reduced scale for high efficiency and preventing crashes on huge records lists
           useCORS: true,
           backgroundColor: "#ffffff"
         });
       });
 
-      const imgData = canvas.toDataURL("image/png");
+      if (!canvas || canvas.width === 0 || canvas.height === 0) {
+        throw new Error("توليد الصورة فشل، حجم المساحة فارغ.");
+      }
+
+      // Use JPEG with 0.95 quality for high rendering speed and low memory impact
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
       const pdf = new jsPDF("p", "mm", "a4");
 
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -156,13 +176,13 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
       let heightLeft = imgHeight;
       let position = margin;
 
-      pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
       heightLeft -= (pageHeight - margin * 2);
 
       while (heightLeft >= 0) {
         position = heightLeft - imgHeight + margin;
         pdf.addPage();
-        pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
 
@@ -172,6 +192,10 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
       console.error(e);
       alert("حدث خطأ أثناء تصدير ملف PDF، يرجى المحاولة مرة أخرى.");
     } finally {
+      // Restore dark mode if it was active
+      if (isDark) {
+        document.documentElement.classList.add("dark");
+      }
       setIsExporting(false);
     }
   };

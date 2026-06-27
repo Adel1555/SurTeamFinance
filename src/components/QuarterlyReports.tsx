@@ -104,7 +104,11 @@ export default function QuarterlyReports({ vouchers, identity }: QuarterlyReport
 
   const handlePrintReport = async () => {
     setIsPrinting(true);
+    const isDark = document.documentElement.classList.contains("dark");
     try {
+      if (isDark) {
+        document.documentElement.classList.remove("dark");
+      }
       window.focus();
       // Brief delay to ensure render focus
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -113,6 +117,9 @@ export default function QuarterlyReports({ vouchers, identity }: QuarterlyReport
       console.error('Error opening print dialog:', err);
       alert('حدث خطأ أثناء فتح واجهة الطباعة، يرجى المحاولة مرة أخرى.');
     } finally {
+      if (isDark) {
+        document.documentElement.classList.add("dark");
+      }
       setIsPrinting(false);
     }
   };
@@ -123,20 +130,24 @@ export default function QuarterlyReports({ vouchers, identity }: QuarterlyReport
 
     setIsExporting(true);
     const restoreStyle = patchGetComputedStyle();
+    const isDark = document.documentElement.classList.contains("dark");
     try {
+      if (isDark) {
+        document.documentElement.classList.remove("dark");
+      }
       // Temporarily reveal the report layout for capturing
       reportElem.classList.remove('hidden');
       reportElem.classList.add('block');
 
       await withOklchWorkaround(reportElem, async () => {
         const canvas = await html2canvas(reportElem, {
-          scale: 2.2, // Crisp high-definition text
+          scale: 1.8, // Slightly optimized scale for stability and speed
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff'
         });
 
-        const imgData = canvas.toDataURL('image/jpeg', 1.0);
+        const imgData = canvas.toDataURL('image/jpeg', 0.95); // Optimized JPEG quality
         const pdf = new jsPDF({
           orientation: 'portrait',
           unit: 'mm',
@@ -160,6 +171,9 @@ export default function QuarterlyReports({ vouchers, identity }: QuarterlyReport
       reportElem.classList.remove('block');
       reportElem.classList.add('hidden');
       restoreStyle();
+      if (isDark) {
+        document.documentElement.classList.add("dark");
+      }
       setIsExporting(false);
     }
   };
