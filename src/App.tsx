@@ -33,6 +33,7 @@ const DEFAULT_PERMISSIONS: EmployeePermissions = {
   importBackup: false,
   resetSystem: false,
   viewDashboard: false,
+  showMainDashboard: true,
   checkUpdates: false,
   managePermissions: false
 };
@@ -209,7 +210,7 @@ export default function App() {
     if (isManagerMode) return true;
     switch (tab) {
       case 'dashboard':
-        return !!currentPermissions.viewDashboard;
+        return !!currentPermissions.showMainDashboard;
       case 'receipt':
         return !!currentPermissions.createReceipt;
       case 'payment':
@@ -1144,89 +1145,91 @@ export default function App() {
             <div className="space-y-6 animate-fade-in print:hidden">
               
               {/* Four Readings Financial Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 py-4 justify-items-center">
-                
-                {/* 1. Receipts total */}
-                <div 
-                  className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-emerald"
-                  style={{ backgroundColor: '#074907' }}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none" />
-                  <div className="p-2 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 mb-2">
-                    <TrendingUp className="w-5 h-5 text-emerald-500 animate-pulse" />
+              {currentPermissions.viewDashboard && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 py-4 justify-items-center">
+                  
+                  {/* 1. Receipts total */}
+                  <div 
+                    className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-emerald"
+                    style={{ backgroundColor: '#074907' }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none" />
+                    <div className="p-2 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 mb-2">
+                      <TrendingUp className="w-5 h-5 text-emerald-500 animate-pulse" />
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#035bf4' }}>
+                      إجمالي مبالغ القبض
+                    </span>
+                    <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ borderColor: '#26c831', color: '#070ff1' }}>
+                      {formatOMR(statistics.totalReceipts)}
+                    </p>
+                    <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2" style={{ color: '#38ec08' }}>
+                      العدد: <strong className="text-emerald-500 font-mono" style={{ color: 'inherit' }}>{statistics.receiptsCount}</strong> سندات
+                    </span>
                   </div>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#035bf4' }}>
-                    إجمالي مبالغ القبض
-                  </span>
-                  <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ borderColor: '#26c831', color: '#070ff1' }}>
-                    {formatOMR(statistics.totalReceipts)}
-                  </p>
-                  <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2" style={{ color: '#38ec08' }}>
-                    العدد: <strong className="text-emerald-500 font-mono" style={{ color: 'inherit' }}>{statistics.receiptsCount}</strong> سندات
-                  </span>
-                </div>
 
-                {/* 2. Payments total */}
-                <div 
-                  className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-rose"
-                  style={{ backgroundColor: '#6a3034' }}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-b from-rose-500/5 to-transparent pointer-events-none" />
-                  <div className="p-2 rounded-full bg-rose-500/10 dark:bg-rose-500/20 mb-2">
-                    <TrendingDown className="w-5 h-5 text-rose-500 animate-pulse" />
+                  {/* 2. Payments total */}
+                  <div 
+                    className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-rose"
+                    style={{ backgroundColor: '#6a3034' }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-b from-rose-500/5 to-transparent pointer-events-none" />
+                    <div className="p-2 rounded-full bg-rose-500/10 dark:bg-rose-500/20 mb-2">
+                      <TrendingDown className="w-5 h-5 text-rose-500 animate-pulse" />
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#b74040' }}>
+                      إجمالي مبالغ الصرف
+                    </span>
+                    <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ color: '#f50c0c' }}>
+                      {formatOMR(statistics.totalPayments)}
+                    </p>
+                    <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2" style={{ color: '#2aef0a' }}>
+                      العدد: <strong className="text-rose-500 font-mono" style={{ color: 'inherit' }}>{statistics.paymentsCount}</strong> سندات
+                    </span>
                   </div>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#b74040' }}>
-                    إجمالي مبالغ الصرف
-                  </span>
-                  <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ color: '#f50c0c' }}>
-                    {formatOMR(statistics.totalPayments)}
-                  </p>
-                  <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2" style={{ color: '#2aef0a' }}>
-                    العدد: <strong className="text-rose-500 font-mono" style={{ color: 'inherit' }}>{statistics.paymentsCount}</strong> سندات
-                  </span>
-                </div>
 
-                {/* 3. Combined total count Vouchers */}
-                <div 
-                  className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-indigo"
-                  style={{ backgroundColor: '#948d69' }}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none" />
-                  <div className="p-2 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 mb-2">
-                    <Coins className="w-5 h-5 text-indigo-500 animate-bounce" />
+                  {/* 3. Combined total count Vouchers */}
+                  <div 
+                    className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-indigo"
+                    style={{ backgroundColor: '#948d69' }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none" />
+                    <div className="p-2 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 mb-2">
+                      <Coins className="w-5 h-5 text-indigo-500 animate-bounce" />
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#01173e' }}>
+                      إجمالي السندات
+                    </span>
+                    <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ color: '#deee0d' }}>
+                      {statistics.totalVouchersCount} <span className="text-xs font-sans text-gray-400 dark:text-gray-500 font-bold" style={{ color: '#e3eb17' }}>سند</span>
+                    </p>
+                    <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2">
+                      سندات القبض والصرف
+                    </span>
                   </div>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#01173e' }}>
-                    إجمالي السندات
-                  </span>
-                  <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ color: '#deee0d' }}>
-                    {statistics.totalVouchersCount} <span className="text-xs font-sans text-gray-400 dark:text-gray-500 font-bold" style={{ color: '#e3eb17' }}>سند</span>
-                  </p>
-                  <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2">
-                    سندات القبض والصرف
-                  </span>
-                </div>
 
-                {/* 4. Net remaining Balance */}
-                <div 
-                  className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-primary"
-                  style={{ backgroundColor: '#7f747f' }}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-b from-[var(--sidebar-active)]/5 to-transparent pointer-events-none" />
-                  <div className="p-2 rounded-full bg-sky-500/10 dark:bg-sky-500/20 mb-2">
-                    <Scale className="w-5 h-5" style={{ color: identity.primaryColor || '#0284c7' }} />
+                  {/* 4. Net remaining Balance */}
+                  <div 
+                    className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-primary"
+                    style={{ backgroundColor: '#7f747f' }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-b from-[var(--sidebar-active)]/5 to-transparent pointer-events-none" />
+                    <div className="p-2 rounded-full bg-sky-500/10 dark:bg-sky-500/20 mb-2">
+                      <Scale className="w-5 h-5" style={{ color: identity.primaryColor || '#0284c7' }} />
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans">
+                      صافي الرصيد المالي
+                    </span>
+                    <p className={`text-lg sm:text-xl font-black mt-1.5 font-mono tracking-tight leading-none ${statistics.netBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-450'}`}>
+                      {formatOMR(statistics.netBalance)}
+                    </p>
+                    <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2">
+                      فائض السيولة المتاحة
+                    </span>
                   </div>
-                  <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans">
-                    صافي الرصيد المالي
-                  </span>
-                  <p className={`text-lg sm:text-xl font-black mt-1.5 font-mono tracking-tight leading-none ${statistics.netBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-450'}`}>
-                    {formatOMR(statistics.netBalance)}
-                  </p>
-                  <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2">
-                    فائض السيولة المتاحة
-                  </span>
-                </div>
 
-              </div>
+                </div>
+              )}
 
               {/* Records Segment in Dashboard */}
               <DashboardRecords

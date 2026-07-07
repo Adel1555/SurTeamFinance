@@ -127,6 +127,7 @@ export interface EmployeePermissions {
   importBackup: boolean;         // استيراد نسخة احتياطية
   resetSystem: boolean;          // تصفير النظام
   viewDashboard: boolean;        // عرض لوحة التحكم
+  showMainDashboard: boolean;    // إظهار الواجهة الرئيسية
   checkUpdates: boolean;         // التحقق من التحديثات
   managePermissions: boolean;    // إدارة الصلاحيات
 }

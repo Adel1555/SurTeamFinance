@@ -57,6 +57,7 @@ const DEFAULT_PERMISSIONS: EmployeePermissions = {
   importBackup: false,
   resetSystem: false,
   viewDashboard: false,
+  showMainDashboard: true,
   checkUpdates: false,
   managePermissions: false
 };
@@ -820,6 +821,7 @@ export default function SettingsPanel({
                     { key: 'viewVoucher', label: 'عرض السند' },
                     { key: 'viewArchive', label: 'عرض الأرشيف' },
                     { key: 'viewDashboard', label: 'عرض لوحة التحكم' },
+                    { key: 'showMainDashboard', label: 'إظهار الواجهة الرئيسية' },
                   ].map((perm) => (
                     <label key={perm.key} className="flex items-center gap-2.5 cursor-pointer text-xs select-none hover:text-gray-900 dark:hover:text-white transition-colors">
                       <input
