@@ -5,8 +5,8 @@
 
 import React, { useState } from 'react';
 import { DatabaseService } from '../db';
-import { VisualIdentity, YearlyArchive, Voucher, AppDatabase, EmployeePermissions } from '../types';
-import { formatOMR, formatDate } from '../utils';
+import { VisualIdentity, YearlyArchive, Voucher, AppDatabase, EmployeePermissions, AutoBackupSnapshot } from '../types';
+import { formatOMR, formatDate, restoreLatestInternalAutoBackup, deleteInternalAutoBackups } from '../utils';
 import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle, Shield, RotateCcw, Save, ShieldCheck, Eye, Printer, FileText, FileSpreadsheet, Paperclip, Sliders, Database, RotateCw, BarChart2 } from 'lucide-react';
 import { AttachmentStorageService } from './AttachmentStorageService';
 import Logo from './Logo';
@@ -32,6 +32,10 @@ interface SettingsPanelProps {
   onIgnoreVersion: (version: string) => void;
   onResetIgnoreVersion: () => void;
   isManagerMode?: boolean;
+  currentPermissions?: EmployeePermissions;
+  onExportPDF?: () => void;
+  onExportExcel?: () => void;
+  onOpenBackupReminder?: () => void;
 }
 
 const DEFAULT_PERMISSIONS: EmployeePermissions = {
@@ -75,11 +79,115 @@ export default function SettingsPanel({
   ignoredVersion,
   onIgnoreVersion,
   onResetIgnoreVersion,
-  isManagerMode = false
+  isManagerMode = false,
+  currentPermissions,
+  onExportPDF,
+  onExportExcel,
+  onOpenBackupReminder
 }: SettingsPanelProps) {
   // Database States
   const [payers, setPayers] = useState<string[]>(() => DatabaseService.getPayers());
   const [methods, setMethods] = useState<string[]>(() => DatabaseService.getPaymentMethods());
+
+  // Determine if active user has manual backup section access
+  const hasBackupAccess = isManagerMode || !!currentPermissions?.exportBackup || !!currentPermissions?.exportFilteredPDF;
+
+  // Local backup status state so we can re-render immediately on manual JSON backup export
+  const [backupStatus, setBackupStatus] = useState(() => {
+    const lastDate = localStorage.getItem('lastManualBackupDate');
+    const lastType = localStorage.getItem('lastManualBackupType');
+    const lastFile = localStorage.getItem('lastManualBackupFileName');
+    return { lastDate, lastType, lastFile };
+  });
+
+  // Helper to trigger instant status refresh when we perform backup actions
+  const refreshLocalBackupStatus = () => {
+    setBackupStatus({
+      lastDate: localStorage.getItem('lastManualBackupDate'),
+      lastType: localStorage.getItem('lastManualBackupType'),
+      lastFile: localStorage.getItem('lastManualBackupFileName')
+    });
+  };
+
+  const [internalAutoBackups, setInternalAutoBackups] = useState<AutoBackupSnapshot[]>(() => {
+    try {
+      const saved = localStorage.getItem('internalAutoBackupSnapshots');
+      return saved ? JSON.parse(saved) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+
+  const refreshInternalAutoBackups = () => {
+    try {
+      const saved = localStorage.getItem('internalAutoBackupSnapshots');
+      setInternalAutoBackups(saved ? JSON.parse(saved) : []);
+    } catch (_) {
+      setInternalAutoBackups([]);
+    }
+  };
+
+  const handleRestoreLatestInternal = async () => {
+    if (internalAutoBackups.length === 0) {
+      showToast('⚠️ لا توجد نسخ احتياطية تلقائية داخلية متوفرة للاسترجاع.');
+      return;
+    }
+    
+    const confirmMessage = 'هل أنت متأكد من رغبتك في استعادة آخر نسخة تلقائية داخلية؟ سيتم استبدال البيانات الحالية بالكامل بالبيانات المحفوظة في تلك النسخة.';
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const res = await restoreLatestInternalAutoBackup();
+      if (res.success) {
+        setPayers(DatabaseService.getPayers());
+        setMethods(DatabaseService.getPaymentMethods());
+        setArchives(DatabaseService.getYearlyArchives());
+        setBackups(DatabaseService.getBackups());
+        onDatabaseReseted(); // Trigger parent refresh of variables
+        showToast('♻️ تم استيراد واستعادة قاعدة البيانات بنجاح من النسخة التلقائية الداخلية.');
+      } else {
+        showToast(`❌ ${res.error || 'فشلت عملية استعادة النسخة التلقائية الداخلية.'}`);
+      }
+    } catch (err: any) {
+      showToast(`❌ فشل استعادة النسخة التلقائية الداخلية: ${err.message || 'خطأ غير معروف'}`);
+    }
+  };
+
+  const handleDeleteInternalSnapshots = () => {
+    const confirmMessage = 'هل أنت متأكد من رغبتك في حذف جميع النسخ التلقائية الداخلية؟ هذا الإجراء لا يمكن التراجع عنه.';
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      deleteInternalAutoBackups();
+      refreshInternalAutoBackups();
+      showToast('🗑️ تم حذف جميع النسخ التلقائية الداخلية بنجاح.');
+    } catch (err: any) {
+      showToast(`❌ فشل حذف النسخ التلقائية الداخلية: ${err.message || 'خطأ غير معروف'}`);
+    }
+  };
+
+  const handleExportPDFClick = () => {
+    if (onExportPDF) {
+      onExportPDF();
+      // Periodically refresh the status card in case the PDF was generated/downloaded
+      setTimeout(refreshLocalBackupStatus, 1000);
+      setTimeout(refreshLocalBackupStatus, 3000);
+      setTimeout(refreshLocalBackupStatus, 7000);
+    }
+  };
+
+  const handleExportExcelClick = () => {
+    if (onExportExcel) {
+      onExportExcel();
+      // Excel is generated instantly in the browser, so we refresh status immediately
+      setTimeout(refreshLocalBackupStatus, 500);
+      setTimeout(refreshLocalBackupStatus, 1500);
+    }
+  };
 
   // Permissions settings state & handlers
   const [permissions, setPermissions] = useState<EmployeePermissions>(() => {
@@ -132,6 +240,25 @@ export default function SettingsPanel({
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [hasManuallyChecked, setHasManuallyChecked] = useState(false);
   const [justDownloadedVersion, setJustDownloadedVersion] = useState<string | null>(null);
+
+  // Backup reminder states
+  const [backupReminderEnabled, setBackupReminderEnabled] = useState<boolean>(() => {
+    try {
+      const val = localStorage.getItem('backupReminderEnabled');
+      return val !== null ? val === 'true' : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const [backupReminderDays, setBackupReminderDays] = useState<number[]>(() => {
+    try {
+      const val = localStorage.getItem('backupReminderDays');
+      return val ? JSON.parse(val) : [0, 4];
+    } catch (e) {
+      return [0, 4];
+    }
+  });
 
   // Warnings / Confirms
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -427,6 +554,13 @@ export default function SettingsPanel({
       const filename = `SurVolunteer_Backup_${formatDateForFilename(new Date())}.json`;
       downloadBackupFile(db, filename);
       showToast('💾 تم تصدير نسخة احتياطية خارجية بنجاح!');
+
+      localStorage.setItem('lastManualBackupDate', Date.now().toString());
+      localStorage.setItem('lastManualBackupType', 'JSON');
+      localStorage.setItem('lastManualBackupFileName', filename);
+      localStorage.setItem('lastBackupCompletedDate', Date.now().toString());
+
+      refreshLocalBackupStatus();
     } catch (e) {
       showToast('❌ تعذر إعداد ملف النسخة الإحتياطية');
     }
@@ -1291,45 +1425,217 @@ export default function SettingsPanel({
       {/* Backup and Restore & Factory reset widgets */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pt-2">
         
-        {/* Backup and Import File Utilities */}
-        <div className={`md:col-span-7 p-6 ${cardStyleClass} space-y-4`}>
-          <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-            حفظ واسترجاع قاعدة البيانات المستقلة (Backup & Import)
-          </h4>
-          <p className="text-xs text-gray-450 leading-relaxed">
-            تمت ببرمجة هذا التطبيق على عزل ملفات قاعدة البيانات عن الكود والواجهات. يمكنك حفظ كامل ميزانيتك، سنداتك، وقائمتك في ملف احتياطي خارجي بصيغة <strong className="font-mono text-[var(--primary-color)]">JSON</strong>، واستيرادها والعمل عليها من أي جهاز آخر دون المساس بالنظام الأساسي.
-          </p>
+        {/* Backup and Import File Utilities - النسخ الاحتياطي اليدوي */}
+        {hasBackupAccess ? (
+          <div className={`md:col-span-7 p-6 ${cardStyleClass} space-y-4 text-right`} dir="rtl">
+            <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-1.5 flex-row-reverse">
+              <Database className="w-4 h-4 text-emerald-500" />
+              النسخ الاحتياطي اليدوي
+            </h4>
+            <p className="text-xs text-gray-400 dark:text-gray-400 leading-relaxed">
+              يمكنك تصدير وحفظ كامل البيانات المالية والنسخ الاحتياطية بصيغة ملفات خارجية لحمايتها من الفقدان والقدرة على استعادتها بأي وقت.
+            </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-            {/* Download Backup */}
-            <button
-              type="button"
-              onClick={handleBackupExport}
-              className={`p-3 border border-gray-200 dark:border-zinc-800 hover:border-gray-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-950 text-gray-800 dark:text-gray-200 transition-all text-xs font-bold text-center flex flex-col items-center justify-center gap-1 ${btnRadius}`}
-            >
-              <div className="flex items-center gap-1.5">
-                <Download className="w-4 h-4 text-emerald-500" />
-                <span className="font-bold">تصدير نسخة احتياطية خارجية</span>
+            {/* Backup Status Display Card */}
+            <div className="bg-gray-50 dark:bg-zinc-900/40 rounded-xl p-4 border border-gray-150 dark:border-zinc-800 space-y-2">
+              <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-850 pb-2 mb-2 flex-row-reverse">
+                <span className="text-xs font-bold text-gray-500 dark:text-gray-400">حالة النسخ الاحتياطي</span>
+                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 flex-row-reverse">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  مؤمن
+                </span>
               </div>
-              <span className="text-[10px] text-gray-400 font-sans">Export Backup File</span>
-            </button>
 
-            {/* Upload Restore */}
-            <label className={`p-2.5 border border-dashed border-gray-300 dark:border-zinc-700 hover:border-gray-400 dark:hover:border-zinc-650 bg-white dark:bg-zinc-950 text-gray-700 dark:text-gray-300 transition-all text-xs font-bold text-center flex flex-col items-center justify-center gap-1 cursor-pointer ${btnRadius}`}>
-              <div className="flex items-center gap-1.5">
-                <Upload className="w-4 h-4 text-sky-500" />
-                <span className="font-bold">استيراد نسخة احتياطية</span>
+              {!backupStatus.lastDate ? (
+                <div className="text-center py-2 text-xs text-gray-500 dark:text-gray-400 font-sans">
+                  لم يتم إنشاء نسخة احتياطية بعد.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 text-xs leading-relaxed text-right font-sans">
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-gray-400">آخر نسخة احتياطية:</p>
+                    <p className="font-bold text-gray-800 dark:text-gray-200">{backupStatus.lastType}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-gray-400">التاريخ:</p>
+                    <p className="font-bold text-gray-800 dark:text-gray-200 font-mono">
+                      {new Date(parseInt(backupStatus.lastDate, 10)).toLocaleDateString('ar-OM')}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-gray-400">الوقت:</p>
+                    <p className="font-bold text-gray-800 dark:text-gray-200 font-mono">
+                      {new Date(parseInt(backupStatus.lastDate, 10)).toLocaleTimeString('ar-OM', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <div className="space-y-1 col-span-2 border-t border-gray-150 dark:border-zinc-850 pt-1.5 mt-1">
+                    <p className="text-[11px] text-gray-400">اسم الملف:</p>
+                    <p className="font-mono text-[10px] text-gray-600 dark:text-gray-300 break-all truncate" title={backupStatus.lastFile || '-'}>
+                      {backupStatus.lastFile || '-'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Warning Messages if > 7 or > 30 days old */}
+              {(() => {
+                if (!backupStatus.lastDate) return null;
+                const diffMs = Date.now() - parseInt(backupStatus.lastDate, 10);
+                const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+                if (diffDays > 30) {
+                  return (
+                    <div className="mt-3 p-3 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 rounded-xl text-[11px] font-bold border border-red-200/55 dark:border-red-950/40 flex items-center gap-2 flex-row-reverse text-right">
+                      <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                      <span>تحذير: مضى أكثر من 30 يوماً على آخر نسخة احتياطية.</span>
+                    </div>
+                  );
+                } else if (diffDays > 7) {
+                  return (
+                    <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 rounded-xl text-[11px] font-bold border border-amber-200/55 dark:border-amber-950/40 flex items-center gap-2 flex-row-reverse text-right">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>تنبيه: مضى أكثر من 7 أيام على آخر نسخة احتياطية.</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+
+            {/* Internal Auto Backup Status Card */}
+            <div className="bg-gray-50 dark:bg-zinc-900/40 rounded-xl p-4 border border-gray-150 dark:border-zinc-800 space-y-2 mt-4">
+              <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-850 pb-2 mb-2 flex-row-reverse">
+                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 font-sans">آخر نسخة تلقائية داخلية</span>
+                <span className="text-xs font-black text-blue-600 dark:text-blue-400 flex items-center gap-1.5 flex-row-reverse font-sans">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  حفظ تلقائي داخلي
+                </span>
               </div>
-              <span className="text-[10px] text-gray-400 font-sans">Import Backup File</span>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleBackupRestore}
-                className="hidden"
-              />
-            </label>
+
+              {internalAutoBackups.length === 0 ? (
+                <div className="text-center py-2 text-xs text-gray-500 dark:text-gray-400 font-sans">
+                  لا توجد نسخ تلقائية داخلية محفوظة حالياً.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 text-xs leading-relaxed text-right font-sans">
+                  <div className="space-y-1 col-span-2 flex items-center justify-between border-b border-gray-100 dark:border-zinc-850 pb-1.5 mb-1.5">
+                    <span className="text-[11px] text-gray-400 font-sans">عدد النسخ المحفوظة:</span>
+                    <span className="font-bold text-gray-800 dark:text-gray-200 font-sans">
+                      {internalAutoBackups.length} / 10 نسخ
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-gray-400 font-sans">التاريخ:</p>
+                    <p className="font-bold text-gray-800 dark:text-gray-200 font-mono">
+                      {new Date(internalAutoBackups[0].timestamp).toLocaleDateString('ar-OM')}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-gray-400 font-sans">الوقت:</p>
+                    <p className="font-bold text-gray-800 dark:text-gray-200 font-mono">
+                      {new Date(internalAutoBackups[0].timestamp).toLocaleTimeString('ar-OM', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Arabic warning note */}
+              <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/10 p-2.5 rounded-lg border border-amber-200/40 dark:border-amber-900/20 text-right leading-normal font-sans">
+                ⚠️ النسخة التلقائية الداخلية لا تغني عن تصدير نسخة احتياطية خارجية وحفظها خارج الجهاز.
+              </div>
+
+              {/* Manager only buttons */}
+              {isManagerMode && (
+                <div className="flex flex-wrap gap-2 pt-2.5 border-t border-gray-200 dark:border-zinc-850 justify-start flex-row-reverse">
+                  <button
+                    type="button"
+                    onClick={handleRestoreLatestInternal}
+                    disabled={internalAutoBackups.length === 0}
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 dark:text-emerald-350 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>استرجاع آخر نسخة تلقائية داخلية</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteInternalSnapshots}
+                    disabled={internalAutoBackups.length === 0}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 dark:text-rose-350 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>حذف النسخ التلقائية الداخلية</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2">
+              {/* Download JSON Backup */}
+              <button
+                type="button"
+                disabled={!isManagerMode && !currentPermissions?.exportBackup}
+                onClick={handleBackupExport}
+                className={`p-3 border border-gray-200 dark:border-zinc-850 hover:border-gray-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-950 text-gray-800 dark:text-gray-200 transition-all text-xs font-bold text-center flex flex-col items-center justify-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${btnRadius}`}
+              >
+                <div className="flex items-center gap-1.5 justify-center">
+                  <Download className="w-4 h-4 text-emerald-500" />
+                  <span className="font-bold">تصدير JSON</span>
+                </div>
+                <span className="text-[10px] text-gray-400 font-sans">Export JSON</span>
+              </button>
+
+              {/* Download PDF Backup */}
+              <button
+                type="button"
+                disabled={!isManagerMode && !currentPermissions?.exportFilteredPDF}
+                onClick={handleExportPDFClick}
+                className={`p-3 border border-gray-200 dark:border-zinc-850 hover:border-gray-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-950 text-gray-800 dark:text-gray-200 transition-all text-xs font-bold text-center flex flex-col items-center justify-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${btnRadius}`}
+              >
+                <div className="flex items-center gap-1.5 justify-center">
+                  <FileText className="w-4 h-4 text-sky-500" />
+                  <span className="font-bold">تصدير PDF</span>
+                </div>
+                <span className="text-[10px] text-gray-400 font-sans">Export PDF</span>
+              </button>
+
+              {/* Download Excel Backup */}
+              <button
+                type="button"
+                disabled={!isManagerMode && !currentPermissions?.exportFilteredPDF}
+                onClick={handleExportExcelClick}
+                className={`p-3 border border-gray-200 dark:border-zinc-850 hover:border-gray-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-950 text-gray-800 dark:text-gray-200 transition-all text-xs font-bold text-center flex flex-col items-center justify-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${btnRadius}`}
+              >
+                <div className="flex items-center gap-1.5 justify-center">
+                  <FileSpreadsheet className="w-4 h-4 text-amber-500" />
+                  <span className="font-bold">تصدير Excel</span>
+                </div>
+                <span className="text-[10px] text-gray-400 font-sans">Export Excel</span>
+              </button>
+
+              {/* Upload Restore */}
+              <label 
+                className={`p-3 border border-dashed border-gray-300 dark:border-zinc-700 hover:border-gray-400 dark:hover:border-zinc-650 bg-white dark:bg-zinc-950 text-gray-700 dark:text-gray-300 transition-all text-xs font-bold text-center flex flex-col items-center justify-center gap-1 cursor-pointer ${btnRadius}`}
+              >
+                <div className="flex items-center gap-1.5 justify-center">
+                  <Upload className="w-4 h-4 text-amber-500" />
+                  <span className="font-bold">استيراد نسخة</span>
+                </div>
+                <span className="text-[10px] text-gray-400 font-sans">Import JSON</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleBackupRestore}
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className={`md:col-span-7 p-6 ${cardStyleClass} flex flex-col items-center justify-center text-center space-y-2 text-gray-400 dark:text-gray-500`}>
+            <Database className="w-8 h-8 opacity-40" />
+            <p className="text-xs font-bold">لا تملك صلاحية تصدير نسخة احتياطية.</p>
+          </div>
+        )}
 
         {/* Hazard Zone - Factory Hard Reset */}
         <div className={`md:col-span-5 p-6 border-2 border-dashed border-rose-200 dark:border-rose-955 bg-rose-50/10 dark:bg-rose-950/2 rounded-2xl space-y-3`}>
@@ -1359,6 +1665,92 @@ export default function SettingsPanel({
           )}
         </div>
 
+      </div>
+
+      {/* Backup Reminder Settings Block */}
+      <div className={`p-6 ${cardStyleClass} space-y-4 mt-6`}>
+        <div className="flex justify-between items-center flex-row-reverse text-right gap-4">
+          <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-1.5 flex-row-reverse">
+            <Sliders className="w-4 h-4 text-emerald-500" />
+            إعدادات التذكير بالنسخ الاحتياطي الدوري
+          </h4>
+          {isManagerMode && onOpenBackupReminder && (
+            <button
+              type="button"
+              onClick={onOpenBackupReminder}
+              className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-amber-500/10 cursor-pointer"
+            >
+              <Database className="w-3.5 h-3.5 animate-pulse" />
+              إظهار تذكير النسخ الاحتياطي الآن
+            </button>
+          )}
+        </div>
+        
+        <p className="text-xs text-gray-450 leading-relaxed text-right" dir="rtl">
+          يمكنك تفعيل أو تعديل أيام وجدول التذكير التلقائي لتنبيه الموظفين والمسؤولين بتصدير نسخة احتياطية من البيانات بشكل دوري لتجنب أي فقدان غير متوقع للسجلات.
+        </p>
+
+        <div className="flex flex-col md:flex-row-reverse gap-4 justify-between items-start md:items-center text-right border-t border-gray-100 dark:border-zinc-800/40 pt-4" dir="rtl">
+          <label className="flex items-center gap-2.5 cursor-pointer text-xs select-none hover:text-gray-900 dark:hover:text-white transition-colors">
+            <input
+              type="checkbox"
+              checked={backupReminderEnabled}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setBackupReminderEnabled(checked);
+                localStorage.setItem('backupReminderEnabled', checked.toString());
+                showToast(checked ? '🔔 تم تفعيل التذكير بالنسخ الاحتياطي الدوري' : '🔕 تم إيقاف التذكير بالنسخ الاحتياطي الدوري');
+              }}
+              className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+            />
+            <span className="font-bold text-gray-700 dark:text-gray-200">تفعيل التذكير بالنسخ الاحتياطي الدوري</span>
+          </label>
+        </div>
+
+        {backupReminderEnabled && (
+          <div className="bg-slate-50/50 dark:bg-zinc-900/40 p-4 rounded-xl border border-gray-100 dark:border-zinc-800/30 text-right space-y-2.5" dir="rtl">
+            <span className="text-xs font-bold text-gray-600 dark:text-gray-300 block">أيام التنبيه الأسبوعية:</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+              {[
+                { dayNum: 0, label: 'الأحد' },
+                { dayNum: 1, label: 'الإثنين' },
+                { dayNum: 2, label: 'الثلاثاء' },
+                { dayNum: 3, label: 'الأربعاء' },
+                { dayNum: 4, label: 'الخميس' },
+                { dayNum: 5, label: 'الجمعة' },
+                { dayNum: 6, label: 'السبت' },
+              ].map((day) => {
+                const isSelected = backupReminderDays.includes(day.dayNum);
+                return (
+                  <button
+                    key={day.dayNum}
+                    type="button"
+                    onClick={() => {
+                      let updated: number[];
+                      if (isSelected) {
+                        updated = backupReminderDays.filter((d) => d !== day.dayNum);
+                      } else {
+                        updated = [...backupReminderDays, day.dayNum].sort();
+                      }
+                      setBackupReminderDays(updated);
+                      localStorage.setItem('backupReminderDays', JSON.stringify(updated));
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-center ${
+                      isSelected
+                        ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700'
+                        : 'bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-750'
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-gray-400">
+              * سيقوم النظام تلقائياً بإظهار تنبيه دوري لطيف عند الدخول للبرنامج في الأيام المحددة.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Auto-Backups List Section */}

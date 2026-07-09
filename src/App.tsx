@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DatabaseService } from './db';
 import { Voucher, VisualIdentity, EmployeePermissions } from './types';
-import { formatOMR, isVersionNewer, hashPassword } from './utils';
+import { formatOMR, isVersionNewer, hashPassword, exportToExcelCSV, createInternalAutoBackup } from './utils';
 import packageJson from '../package.json';
 import { AttachmentStorageService } from './components/AttachmentStorageService';
 
@@ -48,6 +48,7 @@ import ArchivePanel from './components/ArchivePanel';
 import DashboardRecords from './components/DashboardRecords';
 import VisualIdentityPanel from './components/VisualIdentityPanel';
 import PrintVoucher from './components/PrintVoucher';
+import PrintFilteredVouchers from './components/PrintFilteredVouchers';
 import VoucherDetailsModal from './components/VoucherDetailsModal';
 import Logo from './components/Logo';
 
@@ -73,7 +74,12 @@ import {
   ShieldCheck,
   ShieldAlert,
   KeyRound,
-  Unlock
+  Unlock,
+  Database,
+  Download,
+  FileText,
+  FileSpreadsheet,
+  X
 } from 'lucide-react';
 
 type TabType = 'dashboard' | 'receipt' | 'payment' | 'archive' | 'reports' | 'visual' | 'settings';
@@ -104,6 +110,168 @@ export default function App() {
 
   // Voucher edit selector
   const [voucherToEdit, setVoucherToEdit] = useState<Voucher | null>(null);
+
+  // Backup reminder states
+  const [showBackupReminder, setShowBackupReminder] = useState<boolean>(false);
+  const [showBackupPdfExport, setShowBackupPdfExport] = useState<boolean>(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Tracks if backup reminder was shown in the current browser session
+  const hasShownReminderThisSession = React.useRef<boolean>(false);
+
+  // Auto-dismiss the toast alert after 3.5 seconds
+  React.useEffect(() => {
+    if (toastMsg) {
+      const timer = setTimeout(() => {
+        setToastMsg(null);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMsg]);
+
+  // Periodic backup reminder check logic
+  React.useEffect(() => {
+    const checkReminder = () => {
+      // 1. Check if enabled
+      const enabledStr = localStorage.getItem('backupReminderEnabled');
+      const enabled = enabledStr !== null ? enabledStr === 'true' : true;
+      if (!enabled) return;
+
+      // 2. Check remindLaterUntil is still active
+      const remindLaterStr = localStorage.getItem('remindLaterUntil');
+      if (remindLaterStr) {
+        const until = parseInt(remindLaterStr, 10);
+        if (!isNaN(until) && Date.now() < until) {
+          return;
+        }
+      }
+
+      const today = new Date();
+      const todayStr = today.toDateString();
+
+      // 3. Check if backup was completed today (or since last scheduled day)
+      const lastBackupCompletedStr = localStorage.getItem('lastBackupCompletedDate');
+      if (lastBackupCompletedStr) {
+        const lastBackupDate = new Date(parseInt(lastBackupCompletedStr, 10));
+        if (lastBackupDate.toDateString() === todayStr) {
+          return; // Already backed up today
+        }
+      }
+
+      // 4. Check reminder days (default Sunday=0 and Thursday=4)
+      const daysStr = localStorage.getItem('backupReminderDays');
+      const reminderDays: number[] = daysStr ? JSON.parse(daysStr) : [0, 4];
+      const currentDay = today.getDay();
+      if (!reminderDays.includes(currentDay)) {
+        return; // Today is not a scheduled day
+      }
+
+      // 5. Prevent popping up multiple times within the same session
+      if (hasShownReminderThisSession.current) {
+        return;
+      }
+
+      // Trigger the reminder modal!
+      hasShownReminderThisSession.current = true;
+      setShowBackupReminder(true);
+
+      // Create an internal automatic JSON snapshot if one was not already created for that date.
+      createInternalAutoBackup().then((res) => {
+        if (res && !res.success && res.error) {
+          console.error("Internal auto backup failed:", res.error);
+        }
+      });
+    };
+
+    // Check on mount (give it a small delay of 1.5 seconds so the app opens nicely first)
+    const timer = setTimeout(checkReminder, 1500);
+    return () => clearTimeout(timer);
+  }, [refreshKey]);
+
+  const handleBackupExportJSON = async () => {
+    // Respect exportBackup permission
+    if (!isManagerMode && !currentPermissions.exportBackup) {
+      triggerPermissionError("ليس لديك صلاحية تصدير نسخة احتياطية.");
+      return;
+    }
+    try {
+      const db = DatabaseService.getDatabase() as any;
+      const media = await AttachmentStorageService.exportAll();
+      db.attachments_media_folder = media;
+      
+      const pad = (n: number) => n < 10 ? `0${n}` : n;
+      const date = new Date();
+      const yyyy = date.getFullYear();
+      const mm = pad(date.getMonth() + 1);
+      const dd = pad(date.getDate());
+      const hh = pad(date.getHours());
+      const min = pad(date.getMinutes());
+      const filename = `SurVolunteer_Backup_${yyyy}-${mm}-${dd}_${hh}-${min}.json`;
+
+      const stringified = JSON.stringify(db, null, 2);
+      const blob = new Blob([stringified], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      // Update backup completed date!
+      localStorage.setItem('lastManualBackupDate', Date.now().toString());
+      localStorage.setItem('lastManualBackupType', 'JSON');
+      localStorage.setItem('lastManualBackupFileName', filename);
+      localStorage.setItem('lastBackupCompletedDate', Date.now().toString());
+      setToastMsg('💾 تم تصدير نسخة احتياطية خارجية بنجاح!');
+      setShowBackupReminder(false);
+    } catch (e) {
+      setToastMsg('❌ تعذر إعداد ملف النسخة الإحتياطية');
+    }
+  };
+
+  const handleBackupExportPDF = () => {
+    if (!isManagerMode && !currentPermissions.exportFilteredPDF) {
+      triggerPermissionError("ليس لديك صلاحية تصدير السجلات PDF.");
+      return;
+    }
+    setShowBackupPdfExport(true);
+  };
+
+  const handleBackupExportExcel = () => {
+    if (!isManagerMode && !currentPermissions.exportFilteredPDF) {
+      triggerPermissionError("ليس لديك صلاحية تصدير السجلات Excel.");
+      return;
+    }
+    try {
+      const filename = exportToExcelCSV(vouchers, identity.receiptTerm, identity.paymentTerm);
+      
+      localStorage.setItem('lastManualBackupDate', Date.now().toString());
+      localStorage.setItem('lastManualBackupType', 'Excel');
+      localStorage.setItem('lastManualBackupFileName', filename);
+      localStorage.setItem('lastBackupCompletedDate', Date.now().toString());
+
+      setToastMsg('📊 تم تصدير السجلات بصيغة Excel بنجاح!');
+      setShowBackupReminder(false);
+    } catch (e) {
+      setToastMsg('❌ تعذر تصدير السجلات بصيغة Excel');
+    }
+  };
+
+  const handleRemindLater = () => {
+    // Hide until tomorrow (24 hours later)
+    const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+    localStorage.setItem('remindLaterUntil', tomorrow.toString());
+    setShowBackupReminder(false);
+    setToastMsg('🔔 سيتم تذكيرك بالنسخ الاحتياطي لاحقاً.');
+  };
+
+  const handleMarkBackupCompleted = () => {
+    localStorage.setItem('lastBackupCompletedDate', Date.now().toString());
+    setShowBackupReminder(false);
+    setToastMsg('✅ تم تسجيل حالة النسخ الاحتياطي بنجاح! شكراً لحرصك.');
+  };
 
   // Permission error message state for programmatic gates
   const [permissionError, setPermissionError] = useState<string | null>(null);
@@ -1353,6 +1521,10 @@ export default function App() {
                 onIgnoreVersion={handleIgnoreVersion}
                 onResetIgnoreVersion={handleResetIgnoreVersion}
                 isManagerMode={isManagerMode}
+                currentPermissions={currentPermissions}
+                onExportPDF={handleBackupExportPDF}
+                onExportExcel={handleBackupExportExcel}
+                onOpenBackupReminder={() => setShowBackupReminder(true)}
               />
             </div>
           )}
@@ -1695,6 +1867,128 @@ export default function App() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Backup Reminder Modal */}
+      {showBackupReminder && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white dark:bg-[#0c1a30] border-2 border-amber-500/30 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative animate-fade-in text-right">
+            
+            <div className="absolute top-4 left-4">
+              <button 
+                onClick={() => {
+                  setShowBackupReminder(false);
+                }}
+                className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center text-center space-y-4 mb-6">
+              <div className="p-4 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 animate-pulse">
+                <Database className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-black text-gray-900 dark:text-white">
+                تذكير بالنسخ الاحتياطي الدوري
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed font-sans font-medium px-2">
+                حان وقت النسخ الاحتياطي الدوري. يُنصح بتصدير نسخة احتياطية لحماية السجلات.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {/* Option 1: JSON Export (Most Important) */}
+              <button
+                type="button"
+                onClick={handleBackupExportJSON}
+                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm flex items-center justify-between shadow-md shadow-emerald-600/10 transition-all group cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Download className="w-4 h-4 text-emerald-100 group-hover:translate-y-0.5 transition-transform" />
+                  تصدير نسخة احتياطية JSON
+                </span>
+                {!isManagerMode && !currentPermissions.exportBackup && (
+                  <Lock className="w-3.5 h-3.5 text-emerald-200" />
+                )}
+              </button>
+
+              {/* Option 2: PDF Export */}
+              <button
+                type="button"
+                onClick={handleBackupExportPDF}
+                className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 text-white rounded-2xl font-bold text-sm flex items-center justify-between shadow-md shadow-sky-600/10 transition-all group cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-sky-100 group-hover:translate-x-0.5 transition-transform" />
+                  تصدير السجلات PDF
+                </span>
+                {!isManagerMode && !currentPermissions.exportFilteredPDF && (
+                  <Lock className="w-3.5 h-3.5 text-sky-200" />
+                )}
+              </button>
+
+              {/* Option 3: Excel Export */}
+              <button
+                type="button"
+                onClick={handleBackupExportExcel}
+                className="w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-bold text-sm flex items-center justify-between shadow-md shadow-amber-600/10 transition-all group cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-amber-100 group-hover:translate-x-0.5 transition-transform" />
+                  تصدير السجلات Excel
+                </span>
+                {!isManagerMode && !currentPermissions.exportFilteredPDF && (
+                  <Lock className="w-3.5 h-3.5 text-amber-200" />
+                )}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mt-6 pt-5 border-t border-gray-100 dark:border-zinc-800/60">
+              <button
+                type="button"
+                onClick={handleRemindLater}
+                className="py-2.5 px-4 bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-xs text-center transition-all cursor-pointer"
+              >
+                تذكيري لاحقاً
+              </button>
+              <button
+                type="button"
+                onClick={handleMarkBackupCompleted}
+                className="py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs text-center shadow-md shadow-amber-500/15 transition-all cursor-pointer"
+              >
+                تم النسخ الاحتياطي
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Full PDF Export portal from backup reminder */}
+      {showBackupPdfExport && (
+        <PrintFilteredVouchers
+          vouchers={vouchers}
+          selectedMethod="all"
+          identity={identity}
+          onClose={() => setShowBackupPdfExport(false)}
+          permissions={currentPermissions}
+          isManagerMode={isManagerMode}
+        />
+      )}
+
+      {/* Toast Notification Alert Overlay */}
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 max-w-md bg-gray-900 dark:bg-zinc-950 text-white border border-gray-800 rounded-2xl p-4 shadow-2xl z-50 flex items-center justify-between gap-3 text-right flex-row-reverse animate-fade-in animate-bounce" dir="rtl">
+          <p className="text-xs font-black font-sans leading-relaxed">{toastMsg}</p>
+          <button 
+            type="button"
+            onClick={() => setToastMsg(null)}
+            className="text-gray-400 hover:text-white text-xs font-bold px-2 py-1 rounded hover:bg-gray-800 transition-all cursor-pointer"
+          >
+            إغلاق
+          </button>
         </div>
       )}
 

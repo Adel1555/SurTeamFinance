@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { Voucher, AutoBackupSnapshot } from './types';
+import { DatabaseService } from './db';
+import { AttachmentStorageService } from './components/AttachmentStorageService';
+
 // Formatter for Omani Rial (OMR) with exactly 3 decimal places (Baisa decimals)
 export function formatOMR(amount: number, includeSymbol = true): string {
   const num = Number(amount) || 0;
@@ -335,6 +339,199 @@ export async function hashPassword(password: string): Promise<string> {
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Generate and download an Excel-compatible CSV file with Arabic columns and values.
+ * Uses a UTF-8 BOM prefix so that Microsoft Excel loads Arabic characters flawlessly.
+ */
+export function exportToExcelCSV(vouchers: Voucher[], receiptTerm: string, paymentTerm: string): string {
+  const columns = [
+    "رقم السند",
+    "التاريخ",
+    "نوع السند",
+    "الاسم",
+    "طريقة الدفع",
+    "المبلغ",
+    "البيان",
+    "المرفقات إن وجدت"
+  ];
+
+  const escapeCsvValue = (val: any) => {
+    if (val === undefined || val === null) return '""';
+    const str = String(val).replace(/"/g, '""'); // Escape double quotes with double-double quotes
+    return `"${str}"`;
+  };
+
+  const rows = vouchers.map(v => {
+    const isReceipt = v.type === 'receipt';
+    const typeLabel = isReceipt ? receiptTerm : paymentTerm;
+    const attachmentsLabel = (v.attachments && v.attachments.length > 0)
+      ? `نعم (${v.attachments.length})`
+      : "لا";
+
+    return [
+      escapeCsvValue(v.voucherNo),
+      escapeCsvValue(v.date),
+      escapeCsvValue(typeLabel),
+      escapeCsvValue(v.payerOrBeneficiary),
+      escapeCsvValue(v.paymentMethod || 'نقداً'),
+      escapeCsvValue(v.amount),
+      escapeCsvValue(v.description || ''),
+      escapeCsvValue(attachmentsLabel)
+    ];
+  });
+
+  const csvContent = [
+    columns.map(escapeCsvValue).join(','),
+    ...rows.map(row => row.join(','))
+  ].join('\r\n');
+
+  // Prepend UTF-8 BOM (0xEF, 0xBB, 0xBF)
+  const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+  const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+
+  // Filename formatting (AlKhazina_Records_YYYY-MM-DD.csv)
+  const pad = (num: number) => num < 10 ? `0${num}` : num;
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = pad(now.getMonth() + 1);
+  const dd = pad(now.getDate());
+  const filename = `AlKhazina_Records_${yyyy}-${mm}-${dd}.csv`;
+
+  // Standard browser download trigger
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  return filename;
+}
+
+/**
+ * Creates an internal automatic JSON snapshot of the core database data
+ * and stores it under a safe localStorage key. Retains only the latest 10 snapshots.
+ */
+export async function createInternalAutoBackup(): Promise<{ success: boolean; error?: string; exceeded?: boolean }> {
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    // Load existing snapshots
+    const existingStr = localStorage.getItem('internalAutoBackupSnapshots');
+    let snapshots: AutoBackupSnapshot[] = [];
+    if (existingStr) {
+      try {
+        snapshots = JSON.parse(existingStr);
+      } catch (_) {
+        snapshots = [];
+      }
+    }
+    
+    // Check if one was already created for today
+    const alreadyExists = snapshots.some(s => s.dateStr === todayStr);
+    if (alreadyExists) {
+      return { success: true }; // Already created today, no need to duplicate
+    }
+    
+    // Get core database data
+    const db = DatabaseService.getDatabase() as any;
+    const media = await AttachmentStorageService.exportAll();
+    db.attachments_media_folder = media;
+    
+    // Create new snapshot
+    const newSnapshot: AutoBackupSnapshot = {
+      id: `auto_bak_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      dateStr: todayStr,
+      dbData: db
+    };
+    
+    // Add to beginning of array (latest first)
+    snapshots.unshift(newSnapshot);
+    
+    // Sort by timestamp desc to ensure correct order
+    snapshots.sort((a, b) => b.timestamp - a.timestamp);
+    
+    // Retain only latest 10 snapshots
+    if (snapshots.length > 10) {
+      snapshots = snapshots.slice(0, 10);
+    }
+    
+    // Try to save to localStorage
+    try {
+      localStorage.setItem('internalAutoBackupSnapshots', JSON.stringify(snapshots));
+      return { success: true };
+    } catch (e: any) {
+      // Handle QuotaExceededError
+      if (e.name === 'QuotaExceededError' || e.code === 22 || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+        // Remove oldest snapshots one by one and retry
+        let retrySnapshots = [...snapshots];
+        while (retrySnapshots.length > 1) {
+          retrySnapshots.pop(); // remove the oldest
+          try {
+            localStorage.setItem('internalAutoBackupSnapshots', JSON.stringify(retrySnapshots));
+            return { success: true, exceeded: true }; // succeeded after clearing space
+          } catch (inner) {
+            // still exceeding, keep popping
+          }
+        }
+      }
+      return { success: false, error: 'تجاوزت المساحة التخزينية المتاحة في المتصفح (Quota Exceeded)' };
+    }
+  } catch (e: any) {
+    console.error('Error creating internal auto backup', e);
+    return { success: false, error: e.message || 'حدث خطأ غير متوقع أثناء الحفظ التلقائي' };
+  }
+}
+
+/**
+ * Restores the latest internal automatic backup snapshot safely.
+ */
+export async function restoreLatestInternalAutoBackup(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const existingStr = localStorage.getItem('internalAutoBackupSnapshots');
+    if (!existingStr) {
+      return { success: false, error: 'لا توجد نسخ احتياطية تلقائية داخلية متوفرة للاسترجاع.' };
+    }
+    const snapshots: AutoBackupSnapshot[] = JSON.parse(existingStr);
+    if (snapshots.length === 0) {
+      return { success: false, error: 'لا توجد نسخ احتياطية تلقائية داخلية متوفرة للاسترجاع.' };
+    }
+    
+    // The latest snapshot is the first element
+    const latest = snapshots[0];
+    const dbData = latest.dbData;
+    
+    // Import attachments media folder if it exists
+    if (dbData.attachments_media_folder) {
+      await AttachmentStorageService.importAll(dbData.attachments_media_folder);
+    } else {
+      await AttachmentStorageService.clearAll();
+    }
+    
+    // Import database
+    const dbDataStr = JSON.stringify(dbData);
+    const result = DatabaseService.importDatabase(dbDataStr, true);
+    if (!result.success) {
+      return { success: false, error: result.error || 'فشلت عملية استعادة قاعدة البيانات.' };
+    }
+    
+    return { success: true };
+  } catch (e: any) {
+    console.error('Error restoring latest internal auto backup', e);
+    return { success: false, error: e.message || 'حدث خطأ أثناء استعادة النسخة التلقائية الداخلية.' };
+  }
+}
+
+/**
+ * Clears/Deletes all stored internal automatic backup snapshots.
+ */
+export function deleteInternalAutoBackups(): void {
+  localStorage.removeItem('internalAutoBackupSnapshots');
 }
 
 

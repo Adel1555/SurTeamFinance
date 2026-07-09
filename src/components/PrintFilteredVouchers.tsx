@@ -187,7 +187,14 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
       }
 
       const methodText = selectedMethod === 'all' ? 'الكل' : selectedMethod;
-      pdf.save(`report-payment-method-${methodText}-${new Date().toISOString().split('T')[0]}.pdf`);
+      const pdfName = `report-payment-method-${methodText}-${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(pdfName);
+
+      // Record backup metadata for PDF export
+      localStorage.setItem('lastManualBackupDate', Date.now().toString());
+      localStorage.setItem('lastManualBackupType', 'PDF');
+      localStorage.setItem('lastManualBackupFileName', pdfName);
+      localStorage.setItem('lastBackupCompletedDate', Date.now().toString());
     } catch (e) {
       console.error(e);
       alert("حدث خطأ أثناء تصدير ملف PDF، يرجى المحاولة مرة أخرى.");

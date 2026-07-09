@@ -82,6 +82,13 @@ export interface AutoBackup {
   dbSnapshot: AppDatabase;
 }
 
+export interface AutoBackupSnapshot {
+  id: string;
+  timestamp: number;
+  dateStr: string;
+  dbData: AppDatabase & { attachments_media_folder?: Record<string, string> };
+}
+
 export interface AppDatabase {
   vouchers: Voucher[];
   payersList: string[]; // Premade list of payers/donors
