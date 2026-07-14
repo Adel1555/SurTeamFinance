@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { DatabaseService } from '../db';
 import { VisualIdentity, YearlyArchive, Voucher, AppDatabase, EmployeePermissions, AutoBackupSnapshot, CharityProject } from '../types';
 import { formatOMR, formatDate, restoreLatestInternalAutoBackup, deleteInternalAutoBackups } from '../utils';
-import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle, Shield, RotateCcw, Save, ShieldCheck, Eye, Printer, FileText, FileSpreadsheet, Paperclip, Sliders, Database, RotateCw, BarChart2, Heart, ArrowUp, ArrowDown, Plus, CheckCircle, XCircle } from 'lucide-react';
+import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle, Shield, RotateCcw, Save, ShieldCheck, Eye, Printer, FileText, FileSpreadsheet, Paperclip, Sliders, Database, RotateCw, BarChart2, Heart, ArrowUp, ArrowDown, Plus, CheckCircle, XCircle, Search } from 'lucide-react';
 import { AttachmentStorageService } from './AttachmentStorageService';
 import Logo from './Logo';
 
@@ -262,6 +262,19 @@ export default function SettingsPanel({
       return true;
     }
   });
+
+  // Search state variables for managed lists
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
+  const [payerSearchQuery, setPayerSearchQuery] = useState('');
+  const [methodSearchQuery, setMethodSearchQuery] = useState('');
+
+  // Filtered arrays for managed lists
+  const filteredPayers = payers.filter(p => p.toLowerCase().includes(payerSearchQuery.toLowerCase()));
+  const filteredMethods = methods.filter(m => m.toLowerCase().includes(methodSearchQuery.toLowerCase()));
+  const filteredProjects = projects.filter(proj => 
+    proj.name.toLowerCase().includes(projectSearchQuery.toLowerCase()) || 
+    (proj.description || '').toLowerCase().includes(projectSearchQuery.toLowerCase())
+  );
 
   const [backupReminderDays, setBackupReminderDays] = useState<number[]>(() => {
     try {
@@ -1291,56 +1304,79 @@ export default function SettingsPanel({
             />
           </form>
 
+          {/* Search field & count for Payers */}
+          <div className="flex flex-col sm:flex-row gap-2 items-center justify-between text-right" dir="rtl">
+            <div className="relative w-full sm:max-w-[200px]">
+              <input
+                type="text"
+                placeholder="البحث في الدافعين والمتبرعين..."
+                value={payerSearchQuery}
+                onChange={(e) => setPayerSearchQuery(e.target.value)}
+                className="w-full text-[11px] px-3.5 py-1.5 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)]/30"
+              />
+              <Search className="w-3 h-3 text-gray-400 absolute left-2.5 top-2.5" />
+            </div>
+            <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+              {payerSearchQuery.trim()
+                ? `عدد العناصر: ${filteredPayers.length} (مطابقة من ${payers.length})`
+                : `عدد العناصر: ${payers.length}`}
+            </span>
+          </div>
+
           {/* Interactive Lists */}
-          <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 divide-y divide-gray-50 dark:divide-zinc-900/40">
-            {payers.map((p, idx) => (
-              <div key={idx} className="flex items-center justify-between py-2 text-xs flex-row-reverse text-right">
-                
-                {editingPayer === p ? (
-                  <div className="flex gap-1 flex-1">
-                    <button
-                      onClick={handleSavePayerEdit}
-                      className="bg-emerald-600 text-white text-[10px] px-2 py-1 rounded hover:bg-emerald-700"
-                    >
-                      تسجيل
-                    </button>
-                    <button
-                      onClick={() => setEditingPayer(null)}
-                      className="bg-gray-150 dark:bg-zinc-800 text-[10px] px-2 py-1 text-gray-500 rounded"
-                    >
-                      تراجع
-                    </button>
-                    <input
-                      type="text"
-                      value={editPayerVal}
-                      onChange={(e) => setEditPayerVal(e.target.value)}
-                      className="w-full text-[11px] px-2 py-1 border rounded bg-white dark:bg-zinc-950 text-gray-850 dark:text-gray-250 focus:outline-none"
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200">{p}</span>
-                    <div className="flex gap-1.5">
+          <div className="max-h-[320px] overflow-y-auto space-y-1.5 pr-1 divide-y divide-gray-50 dark:divide-zinc-900/40">
+            {filteredPayers.length === 0 ? (
+              <p className="text-center text-xs text-gray-400 py-4 font-sans">لا توجد نتائج مطابقة.</p>
+            ) : (
+              filteredPayers.map((p, idx) => (
+                <div key={idx} className="flex items-center justify-between py-2 text-xs flex-row-reverse text-right">
+                  
+                  {editingPayer === p ? (
+                    <div className="flex gap-1 flex-1">
                       <button
-                        type="button"
-                        onClick={() => handleStartEditPayer(p)}
-                        className="text-gray-400 hover:text-sky-505 p-1 rounded-md hover:bg-sky-50/50 dark:hover:bg-sky-950/20 transition-all"
+                        onClick={handleSavePayerEdit}
+                        className="bg-emerald-600 text-white text-[10px] px-2 py-1 rounded hover:bg-emerald-700"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
+                        تسجيل
                       </button>
                       <button
-                        type="button"
-                        onClick={() => handleDeletePayer(p)}
-                        className="text-gray-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50/50 dark:hover:bg-rose-950/25 transition-all"
+                        onClick={() => setEditingPayer(null)}
+                        className="bg-gray-150 dark:bg-zinc-800 text-[10px] px-2 py-1 text-gray-500 rounded"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        تراجع
                       </button>
+                      <input
+                        type="text"
+                        value={editPayerVal}
+                        onChange={(e) => setEditPayerVal(e.target.value)}
+                        className="w-full text-[11px] px-2 py-1 border rounded bg-white dark:bg-zinc-950 text-gray-850 dark:text-gray-250 focus:outline-none"
+                      />
                     </div>
-                  </>
-                )}
-                
-              </div>
-            ))}
+                  ) : (
+                    <>
+                      <span className="font-semibold text-gray-800 dark:text-gray-200">{p}</span>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditPayer(p)}
+                          className="text-gray-400 hover:text-sky-505 p-1 rounded-md hover:bg-sky-50/50 dark:hover:bg-sky-950/20 transition-all"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePayer(p)}
+                          className="text-gray-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50/50 dark:hover:bg-rose-950/25 transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -1369,55 +1405,78 @@ export default function SettingsPanel({
             />
           </form>
 
-          <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 divide-y divide-gray-50 dark:divide-zinc-900/40">
-            {methods.map((m, idx) => (
-              <div key={idx} className="flex items-center justify-between py-2 text-xs flex-row-reverse text-right">
-                
-                {editingMethod === m ? (
-                  <div className="flex gap-1 flex-1">
-                    <button
-                      onClick={handleSaveMethodEdit}
-                      className="bg-emerald-600 text-white text-[10px] px-2 py-1 rounded"
-                    >
-                      حفظ
-                    </button>
-                    <button
-                      onClick={() => setEditingMethod(null)}
-                      className="bg-gray-150 dark:bg-zinc-800 text-[10px] px-2 py-1 text-gray-500 rounded"
-                    >
-                      تراجع
-                    </button>
-                    <input
-                      type="text"
-                      value={editMethodVal}
-                      onChange={(e) => setEditMethodVal(e.target.value)}
-                      className="w-full text-[11px] px-2 py-1 border rounded bg-white dark:bg-zinc-950 text-gray-850 dark:text-gray-250 focus:outline-none"
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200">{m}</span>
-                    <div className="flex gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEditMethod(m)}
-                        className="text-gray-400 hover:text-sky-505 p-1 rounded-md hover:bg-sky-50/50 dark:hover:bg-sky-950/20 transition-all"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMethod(m)}
-                        className="text-gray-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50/50 dark:hover:bg-rose-950/25 transition-all"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </>
-                )}
+          {/* Search field & count for Payment Methods */}
+          <div className="flex flex-col sm:flex-row gap-2 items-center justify-between text-right" dir="rtl">
+            <div className="relative w-full sm:max-w-[200px]">
+              <input
+                type="text"
+                placeholder="البحث في طرق الدفع..."
+                value={methodSearchQuery}
+                onChange={(e) => setMethodSearchQuery(e.target.value)}
+                className="w-full text-[11px] px-3.5 py-1.5 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)]/30"
+              />
+              <Search className="w-3 h-3 text-gray-400 absolute left-2.5 top-2.5" />
+            </div>
+            <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+              {methodSearchQuery.trim()
+                ? `عدد العناصر: ${filteredMethods.length} (مطابقة من ${methods.length})`
+                : `عدد العناصر: ${methods.length}`}
+            </span>
+          </div>
 
-              </div>
-            ))}
+          <div className="max-h-[320px] overflow-y-auto space-y-1.5 pr-1 divide-y divide-gray-50 dark:divide-zinc-900/40">
+            {filteredMethods.length === 0 ? (
+              <p className="text-center text-xs text-gray-400 py-4 font-sans">لا توجد نتائج مطابقة.</p>
+            ) : (
+              filteredMethods.map((m, idx) => (
+                <div key={idx} className="flex items-center justify-between py-2 text-xs flex-row-reverse text-right">
+                  
+                  {editingMethod === m ? (
+                    <div className="flex gap-1 flex-1">
+                      <button
+                        onClick={handleSaveMethodEdit}
+                        className="bg-emerald-600 text-white text-[10px] px-2 py-1 rounded"
+                      >
+                        حفظ
+                      </button>
+                      <button
+                        onClick={() => setEditingMethod(null)}
+                        className="bg-gray-150 dark:bg-zinc-800 text-[10px] px-2 py-1 text-gray-500 rounded"
+                      >
+                        تراجع
+                      </button>
+                      <input
+                        type="text"
+                        value={editMethodVal}
+                        onChange={(e) => setEditMethodVal(e.target.value)}
+                        className="w-full text-[11px] px-2 py-1 border rounded bg-white dark:bg-zinc-950 text-gray-850 dark:text-gray-250 focus:outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <span className="font-semibold text-gray-800 dark:text-gray-200">{m}</span>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditMethod(m)}
+                          className="text-gray-400 hover:text-sky-505 p-1 rounded-md hover:bg-sky-50/50 dark:hover:bg-sky-950/20 transition-all"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMethod(m)}
+                          className="text-gray-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50/50 dark:hover:bg-rose-950/25 transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -1464,162 +1523,188 @@ export default function SettingsPanel({
               </button>
             </form>
 
+            {/* Search field and Count for Projects */}
+            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between text-right" dir="rtl">
+              <div className="relative w-full sm:max-w-xs">
+                <input
+                  type="text"
+                  placeholder="البحث في المشاريع والمبادرات..."
+                  value={projectSearchQuery}
+                  onChange={(e) => setProjectSearchQuery(e.target.value)}
+                  className="w-full text-xs px-3.5 py-2 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)]/30"
+                />
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+              </div>
+              <span className="text-xs font-black text-gray-500 dark:text-gray-400 font-sans">
+                {projectSearchQuery.trim() 
+                  ? `عدد العناصر: ${filteredProjects.length} (مطابقة من ${projects.length})`
+                  : `عدد العناصر: ${projects.length}`}
+              </span>
+            </div>
+
             {/* Projects List/Table */}
             <div className="overflow-hidden border border-gray-150 dark:border-zinc-805 rounded-xl bg-white dark:bg-zinc-950">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-right border-collapse" dir="rtl">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 text-gray-400 select-none text-[10px]">
-                      <th className="p-3 font-black text-right">المشروع / المبادرة</th>
-                      <th className="p-3 font-black text-right">الوصف</th>
-                      <th className="p-3 font-black text-center">الحالة</th>
-                      <th className="p-3 font-black text-center">الترتيب</th>
-                      <th className="p-3 font-black text-center">الإجراءات</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-zinc-900/40">
-                    {projects.map((proj, idx) => {
-                      const isGeneral = proj.id === 'proj_general';
-                      const isEditing = editingProjectId === proj.id;
-                      
-                      return (
-                        <tr key={proj.id} className="hover:bg-slate-50/20 dark:hover:bg-zinc-900/10 transition-colors">
-                          {/* Project Name */}
-                          <td className="p-3 font-bold text-gray-900 dark:text-white">
-                            {isEditing ? (
-                              <input
-                                type="text"
-                                value={editingProjectName}
-                                onChange={(e) => setEditingProjectName(e.target.value)}
-                                className="w-full text-xs px-2.5 py-1.5 border rounded-lg bg-white dark:bg-zinc-950 text-gray-850 dark:text-gray-250 focus:outline-none"
-                              />
-                            ) : (
-                              <div className="flex items-center gap-2 flex-row-reverse justify-end">
-                                <span>{proj.name}</span>
-                                {isGeneral && (
-                                  <span className="text-[9px] bg-sky-100 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded-md font-sans">
-                                    افتراضي
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Description */}
-                          <td className="p-3 text-gray-500 dark:text-gray-400">
-                            {isEditing ? (
-                              <input
-                                type="text"
-                                value={editingProjectDesc}
-                                onChange={(e) => setEditingProjectDesc(e.target.value)}
-                                className="w-full text-xs px-2.5 py-1.5 border rounded-lg bg-white dark:bg-zinc-950 text-gray-850 dark:text-gray-250 focus:outline-none"
-                              />
-                            ) : (
-                              <span>{proj.description || '—'}</span>
-                            )}
-                          </td>
-
-                          {/* Status */}
-                          <td className="p-3 text-center">
-                            {isGeneral ? (
-                              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-bold text-[10px]">
-                                <CheckCircle className="w-3 h-3" />
-                                نشط دائم
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleToggleProjectActive(proj)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[10px] cursor-pointer transition-all ${
-                                  proj.isActive
-                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
-                                    : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20'
-                                }`}
-                              >
-                                {proj.isActive ? (
-                                  <>
-                                    <CheckCircle className="w-3 h-3" />
-                                    نشط
-                                  </>
+              <div className="overflow-y-auto max-h-[320px]">
+                <div className="overflow-x-auto">
+                  {filteredProjects.length === 0 ? (
+                    <p className="text-center text-xs text-gray-400 py-8 font-sans">لا توجد نتائج مطابقة.</p>
+                  ) : (
+                    <table className="w-full text-xs text-right border-collapse" dir="rtl">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 text-gray-400 select-none text-[10px] sticky top-0 z-10 shadow-sm">
+                          <th className="p-3 font-black text-right bg-slate-50 dark:bg-zinc-900">المشروع / المبادرة</th>
+                          <th className="p-3 font-black text-right bg-slate-50 dark:bg-zinc-900">الوصف</th>
+                          <th className="p-3 font-black text-center bg-slate-50 dark:bg-zinc-900">الحالة</th>
+                          <th className="p-3 font-black text-center bg-slate-50 dark:bg-zinc-900">الترتيب</th>
+                          <th className="p-3 font-black text-center bg-slate-50 dark:bg-zinc-900">الإجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50 dark:divide-zinc-900/40">
+                        {filteredProjects.map((proj) => {
+                          const isGeneral = proj.id === 'proj_general';
+                          const isEditing = editingProjectId === proj.id;
+                          const actualIdx = projects.findIndex(p => p.id === proj.id);
+                          
+                          return (
+                            <tr key={proj.id} className="hover:bg-slate-50/20 dark:hover:bg-zinc-900/10 transition-colors">
+                              {/* Project Name */}
+                              <td className="p-3 font-bold text-gray-900 dark:text-white">
+                                {isEditing ? (
+                                  <input
+                                    type="text"
+                                    value={editingProjectName}
+                                    onChange={(e) => setEditingProjectName(e.target.value)}
+                                    className="w-full text-xs px-2.5 py-1.5 border rounded-lg bg-white dark:bg-zinc-950 text-gray-850 dark:text-gray-250 focus:outline-none"
+                                  />
                                 ) : (
-                                  <>
-                                    <XCircle className="w-3 h-3" />
-                                    معطل
-                                  </>
+                                  <div className="flex items-center gap-2 flex-row-reverse justify-end">
+                                    <span>{proj.name}</span>
+                                    {isGeneral && (
+                                      <span className="text-[9px] bg-sky-100 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded-md font-sans">
+                                        افتراضي
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
-                              </button>
-                            )}
-                          </td>
+                              </td>
 
-                          {/* Reorder Up/Down */}
-                          <td className="p-3 text-center">
-                            <div className="inline-flex gap-1">
-                              <button
-                                type="button"
-                                disabled={idx === 0}
-                                onClick={() => handleMoveProject(idx, 'up')}
-                                className="p-1 rounded-md bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={idx === projects.length - 1}
-                                onClick={() => handleMoveProject(idx, 'down')}
-                                className="p-1 rounded-md bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
+                              {/* Description */}
+                              <td className="p-3 text-gray-500 dark:text-gray-400">
+                                {isEditing ? (
+                                  <input
+                                    type="text"
+                                    value={editingProjectDesc}
+                                    onChange={(e) => setEditingProjectDesc(e.target.value)}
+                                    className="w-full text-xs px-2.5 py-1.5 border rounded-lg bg-white dark:bg-zinc-950 text-gray-850 dark:text-gray-250 focus:outline-none"
+                                  />
+                                ) : (
+                                  <span>{proj.description || '—'}</span>
+                                )}
+                              </td>
 
-                          {/* Actions */}
-                          <td className="p-3 text-center">
-                            {isEditing ? (
-                              <div className="inline-flex gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={handleSaveProjectEdit}
-                                  className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 cursor-pointer"
-                                >
-                                  حفظ
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingProjectId(null)}
-                                  className="px-2 py-1 bg-gray-150 dark:bg-zinc-800 text-gray-650 dark:text-zinc-300 rounded text-[10px] font-bold hover:bg-gray-250 dark:hover:bg-zinc-700 cursor-pointer"
-                                >
-                                  تراجع
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="inline-flex gap-1.5 justify-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEditProject(proj)}
-                                  className="text-gray-400 hover:text-sky-505 p-1 rounded-md hover:bg-sky-50/50 dark:hover:bg-sky-950/20 transition-all"
-                                  title="تعديل بيانات المشروع"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                {!isGeneral && (
+                              {/* Status */}
+                              <td className="p-3 text-center">
+                                {isGeneral ? (
+                                  <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                                    <CheckCircle className="w-3 h-3" />
+                                    نشط دائم
+                                  </span>
+                                ) : (
                                   <button
                                     type="button"
-                                    onClick={() => handleDeleteProject(proj)}
-                                    className="text-gray-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50/50 dark:hover:bg-rose-950/25 transition-all"
-                                    title="حذف المشروع أو تعطيله"
+                                    onClick={() => handleToggleProjectActive(proj)}
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[10px] cursor-pointer transition-all ${
+                                      proj.isActive
+                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+                                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20'
+                                    }`}
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    {proj.isActive ? (
+                                      <>
+                                        <CheckCircle className="w-3 h-3" />
+                                        نشط
+                                      </>
+                                    ) : (
+                                      <>
+                                        <XCircle className="w-3 h-3" />
+                                        معطل
+                                      </>
+                                    )}
                                   </button>
                                 )}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                              </td>
+
+                              {/* Reorder Up/Down */}
+                              <td className="p-3 text-center">
+                                <div className="inline-flex gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={actualIdx === 0}
+                                    onClick={() => handleMoveProject(actualIdx, 'up')}
+                                    className="p-1 rounded-md bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={actualIdx === projects.length - 1}
+                                    onClick={() => handleMoveProject(actualIdx, 'down')}
+                                    className="p-1 rounded-md bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+
+                              {/* Actions */}
+                              <td className="p-3 text-center">
+                                {isEditing ? (
+                                  <div className="inline-flex gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={handleSaveProjectEdit}
+                                      className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 cursor-pointer"
+                                    >
+                                      حفظ
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingProjectId(null)}
+                                      className="px-2 py-1 bg-gray-150 dark:bg-zinc-800 text-gray-650 dark:text-zinc-300 rounded text-[10px] font-bold hover:bg-gray-250 dark:hover:bg-zinc-700 cursor-pointer"
+                                    >
+                                      تراجع
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="inline-flex gap-1.5 justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartEditProject(proj)}
+                                      className="text-gray-400 hover:text-sky-505 p-1 rounded-md hover:bg-sky-50/50 dark:hover:bg-sky-950/20 transition-all"
+                                      title="تعديل بيانات المشروع"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    {!isGeneral && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteProject(proj)}
+                                        className="text-gray-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50/50 dark:hover:bg-rose-950/25 transition-all"
+                                        title="حذف المشروع أو تعطيله"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               </div>
             </div>
           </div>
