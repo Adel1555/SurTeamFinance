@@ -302,6 +302,10 @@ export default function DashboardRecords({ vouchers, identity, onDeleteVoucher, 
                       <span className="text-[10px] text-gray-400 font-mono font-semibold">({v.voucherNo})</span>
                     </div>
                     <div className="flex items-center gap-2 flex-row-reverse text-[10px] text-gray-400">
+                      <span className="bg-slate-100 dark:bg-zinc-850 px-1 rounded text-[9px] font-bold text-gray-650 dark:text-gray-300">
+                        {v.projectNameSnapshot || "تبرع عام / غير مخصص"}
+                      </span>
+                      <span className="opacity-45">•</span>
                       <span>{v.date}</span>
                       <span className="opacity-45">•</span>
                       <span className="max-w-[200px] truncate" title={v.description}>{v.description}</span>

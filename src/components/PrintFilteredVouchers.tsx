@@ -153,7 +153,7 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
 
       const canvas = await withOklchWorkaround(element, async () => {
         return await html2canvas(element, {
-          scale: 1.8, // Slightly reduced scale for high efficiency and preventing crashes on huge records lists
+          scale: Math.max(2.5, window.devicePixelRatio * 2), // High resolution scale for ultra-sharp Arabic text
           useCORS: true,
           backgroundColor: "#ffffff"
         });
@@ -163,8 +163,8 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
         throw new Error("توليد الصورة فشل، حجم المساحة فارغ.");
       }
 
-      // Use JPEG with 0.95 quality for high rendering speed and low memory impact
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      // Use PNG for ultra-sharp text-heavy reports to prevent lossy JPEG artifact blurriness
+      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
 
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -176,13 +176,15 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
       let heightLeft = imgHeight;
       let position = margin;
 
-      pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
+      // Draw the first page
+      pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight, undefined, 'FAST');
       heightLeft -= (pageHeight - margin * 2);
 
-      while (heightLeft >= 0) {
+      // Loop to add subsequent pages with high resolution slicing
+      while (heightLeft > 0) {
         position = heightLeft - imgHeight + margin;
         pdf.addPage();
-        pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight, undefined, 'FAST');
         heightLeft -= pageHeight;
       }
 

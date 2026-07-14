@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Voucher, VisualIdentity, VoucherType, AttachmentMetadata } from '../types';
+import { Voucher, VisualIdentity, VoucherType, AttachmentMetadata, CharityProject } from '../types';
 import { DatabaseService } from '../db';
 import { formatOMR, tafqeet } from '../utils';
 import { Calendar, User, DollarSign, CreditCard, AlignRight, FileText, CheckCircle, ChevronDown, Plus, Info } from 'lucide-react';
@@ -22,6 +22,8 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
   // Pull drop options
   const [payers, setPayers] = useState<string[]>([]);
   const [methods, setMethods] = useState<string[]>([]);
+  const [projects, setProjects] = useState<CharityProject[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('proj_general');
   
   // Voucher number
   const [voucherNo, setVoucherNo] = useState('');
@@ -49,12 +51,18 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
     );
   }, [voucherNo, voucherToEdit]);
 
+  // Filtered projects list to handle inactive items gracefully
+  const filteredProjects = React.useMemo(() => {
+    return projects.filter(p => p.isActive || p.id === selectedProjectId);
+  }, [projects, selectedProjectId]);
+
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
   useEffect(() => {
     // Initial fetch from db
     setPayers(DatabaseService.getPayers());
     setMethods(DatabaseService.getPaymentMethods());
+    setProjects(DatabaseService.getProjects());
     
     if (voucherToEdit) {
       setVoucherNo(voucherToEdit.voucherNo);
@@ -65,6 +73,7 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
       setDescription(voucherToEdit.description);
       setNotes(voucherToEdit.notes || '');
       setAttachments(voucherToEdit.attachments || []);
+      setSelectedProjectId(voucherToEdit.projectId || 'proj_general');
     } else {
       // Auto-generate voucher number
       const nextNo = DatabaseService.getNextVoucherNo('receipt');
@@ -85,6 +94,8 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
       if (dbPayers.length > 0) {
         setPayer(dbPayers[0]);
       }
+
+      setSelectedProjectId('proj_general');
     }
   }, [voucherToEdit]);
 
@@ -104,6 +115,9 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
   const executeSave = () => {
     setShowSaveConfirm(false);
     try {
+      const selectedProj = projects.find(p => p.id === selectedProjectId) || projects.find(p => p.id === 'proj_general');
+      const projName = selectedProj ? selectedProj.name : 'تبرع عام / غير مخصص';
+
       if (voucherToEdit) {
         DatabaseService.updateVoucher(voucherToEdit.id, {
           voucherNo,
@@ -113,7 +127,9 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
           paymentMethod: method,
           description,
           notes,
-          attachments
+          attachments,
+          projectId: selectedProjectId,
+          projectNameSnapshot: projName
         });
         setSuccessMsg('تم تحديث سند القبض بنجاح في قاعدة البيانات!');
       } else {
@@ -126,7 +142,9 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
           paymentMethod: method,
           description,
           notes,
-          attachments
+          attachments,
+          projectId: selectedProjectId,
+          projectNameSnapshot: projName
         });
         setSuccessMsg('تم حفظ سند القبض بنجاح في قاعدة البيانات!');
       }
@@ -183,6 +201,9 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
       return;
     }
 
+    const selectedProj = projects.find(p => p.id === selectedProjectId) || projects.find(p => p.id === 'proj_general');
+    const projName = selectedProj ? selectedProj.name : 'تبرع عام / غير مخصص';
+
     // Build temporary voucher mock to preview inside print layout
     const mockVoucher: Voucher = {
       id: voucherToEdit ? voucherToEdit.id : 'preview_id',
@@ -195,7 +216,9 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
       description,
       notes,
       createdAt: voucherToEdit ? voucherToEdit.createdAt : Date.now(),
-      attachments
+      attachments,
+      projectId: selectedProjectId,
+      projectNameSnapshot: projName
     };
 
     onPreviewVoucher(mockVoucher);
@@ -381,6 +404,27 @@ export default function ReceiptVoucherForm({ identity, onSaved, onCancel, onPrev
                 <option key={idx} value={m}>{m}</option>
               ))}
             </select>
+          </div>
+
+          {/* Charity project integration */}
+          <div className="space-y-1.5 text-right md:col-span-2">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5 flex-row-reverse">
+              <CheckCircle className="w-3.5 h-3.5 text-gray-400" />
+              المشروع / المبادرة المدعومة
+            </label>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              required
+              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-blue-200/60 dark:border-blue-900/40 bg-white/95 dark:bg-[#0c203b] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)]/50 focus:border-[var(--primary-color)] focus:shadow-[0_0_15px_var(--primary-color-alpha)] transition-all duration-300"
+            >
+              {filteredProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}{!p.isActive ? ' (غير نشط)' : ''}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-sans">
+              حدد المشروع أو المبادرة التي خُصص لها هذا التبرع.
+            </p>
           </div>
 
         </div>

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Voucher, VisualIdentity, AttachmentMetadata } from '../types';
+import { Voucher, VisualIdentity, AttachmentMetadata, CharityProject } from '../types';
 import { DatabaseService } from '../db';
 import { formatOMR, tafqeet } from '../utils';
 import { Calendar, UserCheck, DollarSign, CreditCard, AlignRight, FileText, CheckCircle, Info } from 'lucide-react';
@@ -21,6 +21,8 @@ interface PaymentVoucherFormProps {
 export default function PaymentVoucherForm({ identity, onSaved, onCancel, onPreviewVoucher, voucherToEdit }: PaymentVoucherFormProps) {
   // Dropdowns state
   const [methods, setMethods] = useState<string[]>([]);
+  const [projects, setProjects] = useState<CharityProject[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   
   // Voucher number
   const [voucherNo, setVoucherNo] = useState('');
@@ -38,6 +40,11 @@ export default function PaymentVoucherForm({ identity, onSaved, onCancel, onPrev
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Filtered projects list to handle inactive items gracefully
+  const filteredProjects = React.useMemo(() => {
+    return projects.filter(p => p.isActive || p.id === selectedProjectId);
+  }, [projects, selectedProjectId]);
+
   // Check for duplicate voucher numbers
   const isDuplicate = React.useMemo(() => {
     if (!voucherNo.trim()) return false;
@@ -51,6 +58,7 @@ export default function PaymentVoucherForm({ identity, onSaved, onCancel, onPrev
   useEffect(() => {
     // Dynamic lists
     setMethods(DatabaseService.getPaymentMethods());
+    setProjects(DatabaseService.getProjects());
     
     if (voucherToEdit) {
       setVoucherNo(voucherToEdit.voucherNo);
@@ -61,6 +69,7 @@ export default function PaymentVoucherForm({ identity, onSaved, onCancel, onPrev
       setDescription(voucherToEdit.description);
       setNotes(voucherToEdit.notes || '');
       setAttachments(voucherToEdit.attachments || []);
+      setSelectedProjectId(voucherToEdit.projectId || '');
     } else {
       // Auto sequence
       const nextNo = DatabaseService.getNextVoucherNo('payment');
@@ -75,12 +84,17 @@ export default function PaymentVoucherForm({ identity, onSaved, onCancel, onPrev
       if (dbMethods.length > 0) {
         setMethod(dbMethods[0]);
       }
+
+      setSelectedProjectId('');
     }
   }, [voucherToEdit]);
 
   const executeSave = () => {
     setShowSaveConfirm(false);
     try {
+      const selectedProj = projects.find(p => p.id === selectedProjectId);
+      const projName = selectedProj ? selectedProj.name : '';
+
       if (voucherToEdit) {
         DatabaseService.updateVoucher(voucherToEdit.id, {
           voucherNo,
@@ -90,7 +104,9 @@ export default function PaymentVoucherForm({ identity, onSaved, onCancel, onPrev
           paymentMethod: method,
           description,
           notes,
-          attachments
+          attachments,
+          projectId: selectedProjectId,
+          projectNameSnapshot: projName
         });
         setSuccessMsg('تم تحديث سند الصرف المالي بنجاح في السجلات!');
       } else {
@@ -103,7 +119,9 @@ export default function PaymentVoucherForm({ identity, onSaved, onCancel, onPrev
           paymentMethod: method,
           description,
           notes,
-          attachments
+          attachments,
+          projectId: selectedProjectId,
+          projectNameSnapshot: projName
         });
         setSuccessMsg('تم حفظ سند الصرف المالي بنجاح في السجلات!');
       }
@@ -160,6 +178,9 @@ export default function PaymentVoucherForm({ identity, onSaved, onCancel, onPrev
       return;
     }
 
+    const selectedProj = projects.find(p => p.id === selectedProjectId);
+    const projName = selectedProj ? selectedProj.name : '';
+
     const mockVoucher: Voucher = {
       id: voucherToEdit ? voucherToEdit.id : 'preview_id_payment',
       voucherNo,
@@ -171,7 +192,9 @@ export default function PaymentVoucherForm({ identity, onSaved, onCancel, onPrev
       description,
       notes,
       createdAt: voucherToEdit ? voucherToEdit.createdAt : Date.now(),
-      attachments
+      attachments,
+      projectId: selectedProjectId,
+      projectNameSnapshot: projName
     };
 
     onPreviewVoucher(mockVoucher);
@@ -316,6 +339,24 @@ export default function PaymentVoucherForm({ identity, onSaved, onCancel, onPrev
               <option value="">-- اختر طريقة الصرف --</option>
               {methods.map((m, idx) => (
                 <option key={idx} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Charity project integration */}
+          <div className="space-y-1.5 text-right md:col-span-2">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5 flex-row-reverse">
+              <CheckCircle className="w-3.5 h-3.5 text-gray-400" />
+              المشروع / المبادرة المرتبط بها المصروف (اختياري)
+            </label>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-blue-200/60 dark:border-blue-900/40 bg-white/95 dark:bg-[#0c203b] text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)]/50 focus:border-[var(--primary-color)] focus:shadow-[0_0_15px_var(--primary-color-alpha)] transition-all duration-300"
+            >
+              <option value="">غير مرتبط بمشروع معين</option>
+              {filteredProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}{!p.isActive ? ' (غير نشط)' : ''}</option>
               ))}
             </select>
           </div>

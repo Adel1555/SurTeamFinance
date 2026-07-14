@@ -5,9 +5,9 @@
 
 import React, { useState } from 'react';
 import { DatabaseService } from '../db';
-import { VisualIdentity, YearlyArchive, Voucher, AppDatabase, EmployeePermissions, AutoBackupSnapshot } from '../types';
+import { VisualIdentity, YearlyArchive, Voucher, AppDatabase, EmployeePermissions, AutoBackupSnapshot, CharityProject } from '../types';
 import { formatOMR, formatDate, restoreLatestInternalAutoBackup, deleteInternalAutoBackups } from '../utils';
-import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle, Shield, RotateCcw, Save, ShieldCheck, Eye, Printer, FileText, FileSpreadsheet, Paperclip, Sliders, Database, RotateCw, BarChart2 } from 'lucide-react';
+import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle, Shield, RotateCcw, Save, ShieldCheck, Eye, Printer, FileText, FileSpreadsheet, Paperclip, Sliders, Database, RotateCw, BarChart2, Heart, ArrowUp, ArrowDown, Plus, CheckCircle, XCircle } from 'lucide-react';
 import { AttachmentStorageService } from './AttachmentStorageService';
 import Logo from './Logo';
 
@@ -63,7 +63,11 @@ const DEFAULT_PERMISSIONS: EmployeePermissions = {
   viewDashboard: false,
   showMainDashboard: true,
   checkUpdates: false,
-  managePermissions: false
+  managePermissions: false,
+  viewSponsorsDonations: false,
+  viewProjectFinancialTotals: false,
+  exportSponsorProjectReports: false,
+  manageProjects: false
 };
 
 export default function SettingsPanel({ 
@@ -229,6 +233,14 @@ export default function SettingsPanel({
   const [newMethod, setNewMethod] = useState('');
   const [editingMethod, setEditingMethod] = useState<string | null>(null);
   const [editMethodVal, setEditMethodVal] = useState('');
+
+  // Projects States
+  const [projects, setProjects] = useState<CharityProject[]>(() => DatabaseService.getProjects());
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState('');
+  const [editingProjectDesc, setEditingProjectDesc] = useState('');
 
   // Custom confirmation modal states (avoiding window.confirm iframe blocks)
   const [payerToDelete, setPayerToDelete] = useState<string | null>(null);
@@ -518,6 +530,95 @@ export default function SettingsPanel({
     setMethods(DatabaseService.getPaymentMethods());
     setMethodToDelete(null);
     showToast('🗑️ تم إزالة طريقة الصرف والقيمة المرجعية');
+  };
+
+  // Projects CRUD Actions
+  const handleAddProject = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newProjectName.trim();
+    if (!name) return;
+    const res = DatabaseService.addProject(name, newProjectDesc);
+    if (res.success) {
+      showToast('✅ تم إضافة المشروع بنجاح!');
+      setNewProjectName('');
+      setNewProjectDesc('');
+      setProjects(DatabaseService.getProjects());
+    } else {
+      showToast(`⚠️ ${res.error}`);
+    }
+  };
+
+  const handleStartEditProject = (proj: CharityProject) => {
+    setEditingProjectId(proj.id);
+    setEditingProjectName(proj.name);
+    setEditingProjectDesc(proj.description || '');
+  };
+
+  const handleSaveProjectEdit = () => {
+    if (!editingProjectId) return;
+    const res = DatabaseService.updateProject(editingProjectId, {
+      name: editingProjectName,
+      description: editingProjectDesc
+    });
+    if (res.success) {
+      showToast('✅ تم تحديث بيانات المشروع بنجاح!');
+      setEditingProjectId(null);
+      setProjects(DatabaseService.getProjects());
+    } else {
+      showToast(`⚠️ ${res.error}`);
+    }
+  };
+
+  const handleToggleProjectActive = (proj: CharityProject) => {
+    if (proj.id === 'proj_general') {
+      showToast('⚠️ لا يمكن إلغاء تفعيل المشروع العام الافتراضي.');
+      return;
+    }
+    const res = DatabaseService.updateProject(proj.id, { isActive: !proj.isActive });
+    if (res.success) {
+      showToast(proj.isActive ? '🔕 تم إلغاء تفعيل المشروع' : '🔔 تم تفعيل المشروع بنجاح');
+      setProjects(DatabaseService.getProjects());
+    } else {
+      showToast(`⚠️ ${res.error}`);
+    }
+  };
+
+  const handleDeleteProject = (proj: CharityProject) => {
+    if (proj.id === 'proj_general') {
+      showToast('⚠️ لا يمكن حذف المشروع العام الافتراضي.');
+      return;
+    }
+    
+    const confirmMsg = `هل أنت متأكد من رغبتك في حذف أو تعطيل مشروع "${proj.name}"؟`;
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    const res = DatabaseService.deleteProject(proj.id);
+    if (res.success) {
+      if (res.deactivated) {
+        showToast('⚠️ تم إيقاف تفعيل المشروع بدلاً من حذفه لوجود سندات مسجلة عليه.');
+      } else {
+        showToast('🗑️ تم حذف المشروع بالكامل بنجاح.');
+      }
+      setProjects(DatabaseService.getProjects());
+    } else {
+      showToast(`⚠️ ${res.error}`);
+    }
+  };
+
+  const handleMoveProject = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= projects.length) return;
+    
+    const updated = [...projects];
+    const temp = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = temp;
+    
+    DatabaseService.saveProjects(updated);
+    setProjects(updated);
+    showToast('↕️ تم إعادة ترتيب المشاريع بنجاح.');
   };
 
   const formatDateForFilename = (date: Date) => {
@@ -1050,6 +1151,32 @@ export default function SettingsPanel({
                 </div>
               </div>
 
+              {/* Group 6: الرعاة والتبرعات والمشاريع */}
+              <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-zinc-900/30 border border-gray-100 dark:border-zinc-800/50 space-y-3">
+                <h4 className="text-[11px] font-black text-rose-600 dark:text-rose-400 border-b border-gray-100 dark:border-zinc-800 pb-1.5 flex items-center gap-1.5 flex-row-reverse">
+                  <Heart className="w-4 h-4 shrink-0 text-rose-500 animate-pulse" />
+                  <span>الرعاة والتبرعات والمشاريع الخيرية</span>
+                </h4>
+                <div className="space-y-2.5">
+                  {[
+                    { key: 'viewSponsorsDonations', label: 'عرض قسم الرعاة والتبرعات' },
+                    { key: 'viewProjectFinancialTotals', label: 'عرض إجماليات المشاريع وأرصدتها' },
+                    { key: 'exportSponsorProjectReports', label: 'طباعة وتصدير تقارير الرعاة والمشاريع' },
+                    { key: 'manageProjects', label: 'إدارة المشاريع والمبادرات' },
+                  ].map((perm) => (
+                    <label key={perm.key} className="flex items-center gap-2.5 cursor-pointer text-xs select-none hover:text-gray-900 dark:hover:text-white transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={permissions[perm.key as keyof EmployeePermissions]}
+                        onChange={() => handleTogglePermission(perm.key as keyof EmployeePermissions)}
+                        className="w-4 h-4 rounded text-[var(--primary-color)] focus:ring-[var(--primary-color)] dark:border-zinc-800 bg-gray-100 dark:bg-zinc-950/60 cursor-pointer accent-rose-500"
+                      />
+                      <span className="font-bold text-gray-700 dark:text-gray-300">{perm.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
             </div>
 
             {/* Hint / Warning banner */}
@@ -1294,6 +1421,215 @@ export default function SettingsPanel({
           </div>
         </div>
 
+      </div>
+
+      {/* Projects and Initiatives Management Section */}
+      <div className={`lg:col-span-12 p-6 ${cardStyleClass} space-y-4`} id="projects-management-section">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1.5 border-b border-gray-50 dark:border-zinc-900 pb-2 flex-row-reverse">
+          <Heart className="w-4 h-4 text-rose-500 animate-pulse" />
+          إدارة المشاريع والمبادرات الخيرية
+        </h3>
+        <p className="text-xs text-gray-400 dark:text-gray-400 leading-relaxed text-right">
+          قسم إدارة وضبط المشاريع والمبادرات المفتوحة لتلقي التبرعات. يمكنك إضافة مبادرات جديدة، تعديل بياناتها، ترتيب ظهورها في القوائم، أو تعطيلها لإيقاف الصرف والقبض عليها مع حماية السجلات التاريخية.
+        </p>
+
+        {(isManagerMode || currentPermissions?.manageProjects) ? (
+          <div className="space-y-4">
+            {/* Add Project Form */}
+            <form onSubmit={handleAddProject} className="flex flex-col sm:flex-row gap-3 bg-slate-50/40 dark:bg-zinc-900/10 p-4 rounded-xl border border-gray-150/40 dark:border-zinc-800/30">
+              <div className="flex-1 space-y-2">
+                <input
+                  type="text"
+                  required
+                  placeholder="اسم المشروع أو المبادرة الخيرية الجديدة..."
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-gray-800 dark:text-gray-200 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  placeholder="وصف مختصر للمشروع أو المبادرة (اختياري)..."
+                  value={newProjectDesc}
+                  onChange={(e) => setNewProjectDesc(e.target.value)}
+                  className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-gray-800 dark:text-gray-200 focus:outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                style={{ backgroundColor: identity.primaryColor }}
+                className={`px-6 py-2 text-xs font-black text-white hover:opacity-90 transition-all sm:self-end ${btnRadius} flex items-center gap-1 justify-center shrink-0 h-10`}
+              >
+                <Plus className="w-4 h-4" />
+                إضافة المشروع
+              </button>
+            </form>
+
+            {/* Projects List/Table */}
+            <div className="overflow-hidden border border-gray-150 dark:border-zinc-805 rounded-xl bg-white dark:bg-zinc-950">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-right border-collapse" dir="rtl">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 text-gray-400 select-none text-[10px]">
+                      <th className="p-3 font-black text-right">المشروع / المبادرة</th>
+                      <th className="p-3 font-black text-right">الوصف</th>
+                      <th className="p-3 font-black text-center">الحالة</th>
+                      <th className="p-3 font-black text-center">الترتيب</th>
+                      <th className="p-3 font-black text-center">الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 dark:divide-zinc-900/40">
+                    {projects.map((proj, idx) => {
+                      const isGeneral = proj.id === 'proj_general';
+                      const isEditing = editingProjectId === proj.id;
+                      
+                      return (
+                        <tr key={proj.id} className="hover:bg-slate-50/20 dark:hover:bg-zinc-900/10 transition-colors">
+                          {/* Project Name */}
+                          <td className="p-3 font-bold text-gray-900 dark:text-white">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingProjectName}
+                                onChange={(e) => setEditingProjectName(e.target.value)}
+                                className="w-full text-xs px-2.5 py-1.5 border rounded-lg bg-white dark:bg-zinc-950 text-gray-850 dark:text-gray-250 focus:outline-none"
+                              />
+                            ) : (
+                              <div className="flex items-center gap-2 flex-row-reverse justify-end">
+                                <span>{proj.name}</span>
+                                {isGeneral && (
+                                  <span className="text-[9px] bg-sky-100 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded-md font-sans">
+                                    افتراضي
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Description */}
+                          <td className="p-3 text-gray-500 dark:text-gray-400">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingProjectDesc}
+                                onChange={(e) => setEditingProjectDesc(e.target.value)}
+                                className="w-full text-xs px-2.5 py-1.5 border rounded-lg bg-white dark:bg-zinc-950 text-gray-850 dark:text-gray-250 focus:outline-none"
+                              />
+                            ) : (
+                              <span>{proj.description || '—'}</span>
+                            )}
+                          </td>
+
+                          {/* Status */}
+                          <td className="p-3 text-center">
+                            {isGeneral ? (
+                              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                                <CheckCircle className="w-3 h-3" />
+                                نشط دائم
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleProjectActive(proj)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[10px] cursor-pointer transition-all ${
+                                  proj.isActive
+                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
+                                    : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20'
+                                }`}
+                              >
+                                {proj.isActive ? (
+                                  <>
+                                    <CheckCircle className="w-3 h-3" />
+                                    نشط
+                                  </>
+                                ) : (
+                                  <>
+                                    <XCircle className="w-3 h-3" />
+                                    معطل
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </td>
+
+                          {/* Reorder Up/Down */}
+                          <td className="p-3 text-center">
+                            <div className="inline-flex gap-1">
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                onClick={() => handleMoveProject(idx, 'up')}
+                                className="p-1 rounded-md bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === projects.length - 1}
+                                onClick={() => handleMoveProject(idx, 'down')}
+                                className="p-1 rounded-md bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="p-3 text-center">
+                            {isEditing ? (
+                              <div className="inline-flex gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={handleSaveProjectEdit}
+                                  className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 cursor-pointer"
+                                >
+                                  حفظ
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingProjectId(null)}
+                                  className="px-2 py-1 bg-gray-150 dark:bg-zinc-800 text-gray-650 dark:text-zinc-300 rounded text-[10px] font-bold hover:bg-gray-250 dark:hover:bg-zinc-700 cursor-pointer"
+                                >
+                                  تراجع
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="inline-flex gap-1.5 justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditProject(proj)}
+                                  className="text-gray-400 hover:text-sky-505 p-1 rounded-md hover:bg-sky-50/50 dark:hover:bg-sky-950/20 transition-all"
+                                  title="تعديل بيانات المشروع"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                {!isGeneral && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteProject(proj)}
+                                    className="text-gray-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50/50 dark:hover:bg-rose-950/25 transition-all"
+                                    title="حذف المشروع أو تعطيله"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-6 bg-rose-50/20 dark:bg-rose-955/5 border border-dashed border-rose-200 dark:border-rose-900/35 rounded-2xl flex flex-col items-center justify-center text-center space-y-2">
+            <Shield className="w-8 h-8 text-rose-500/50 animate-bounce" />
+            <p className="text-xs font-black text-rose-700 dark:text-rose-400">غير مصرح بالدخول</p>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans">قسم إدارة المشاريع مخصص لمدير النظام أو الموظفين الذين يمتلكون صلاحية "إدارة المشاريع والمبادرات".</p>
+          </div>
+        )}
       </div>
 
       {/* 2026 Fiscal Year Archive System */}
@@ -1905,8 +2241,8 @@ export default function SettingsPanel({
 
       {/* 1. Delete Payer Confirm Modal */}
       {payerToDelete && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white dark:bg-zinc-950 p-6 rounded-2xl max-w-md w-full border border-rose-100 dark:border-rose-950/50 shadow-2xl space-y-4 text-right">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-zinc-950 p-6 rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto border border-rose-100 dark:border-rose-950/50 shadow-2xl space-y-4 text-right">
             <div className="flex items-center gap-2 justify-end text-rose-600 dark:text-rose-450">
               <span className="font-bold text-sm">تأكيد حذف الدافع</span>
               <AlertTriangle className="w-5 h-5 shrink-0 animate-pulse" />

@@ -3,17 +3,29 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { AppDatabase, Voucher, VisualIdentity, VoucherType, YearlyArchive } from './types';
+import { AppDatabase, Voucher, VisualIdentity, VoucherType, YearlyArchive, CharityProject } from './types';
 
 const STORAGE_KEY = 'sur_volunteer_finance_db';
 
+export const DEFAULT_PROJECTS: CharityProject[] = [
+  { id: 'proj_general', name: 'تبرع عام / غير مخصص', isActive: true, createdAt: new Date('2026-01-01').toISOString() },
+  { id: 'proj_eid_clothes', name: 'كسوة العيد', isActive: true, createdAt: new Date('2026-01-01').toISOString() },
+  { id: 'proj_sacrifices', name: 'الأضاحي', isActive: true, createdAt: new Date('2026-01-01').toISOString() },
+  { id: 'proj_fk_korba', name: 'فك كربة', isActive: true, createdAt: new Date('2026-01-01').toISOString() },
+  { id: 'proj_expiations', name: 'كفارات', isActive: true, createdAt: new Date('2026-01-01').toISOString() },
+  { id: 'proj_orphan_help', name: 'مساعدة يتيم', isActive: true, createdAt: new Date('2026-01-01').toISOString() },
+  { id: 'proj_school_bag', name: 'الحقيبة المدرسة', isActive: true, createdAt: new Date('2026-01-01').toISOString() }, // wait, user explicitly typed الحقيبة المدرسية, let's write الحقيبة المدرسية
+  { id: 'proj_fast_break', name: 'إفطار صائم', isActive: true, createdAt: new Date('2026-01-01').toISOString() },
+  { id: 'proj_medical_help', name: 'مساعدات علاجية', isActive: true, createdAt: new Date('2026-01-01').toISOString() },
+  { id: 'proj_house_build', name: 'بناء أو ترميم منزل', isActive: true, createdAt: new Date('2026-01-01').toISOString() }
+];
+
+// Let's fix the name of school bag to:
+// - "الحقيبة المدرسية" as requested.
+DEFAULT_PROJECTS[6].name = 'الحقيبة المدرسية';
+
 const DEFAULT_PAYERS = [
-  'فاعل خير',
-  'سالم بن علي الغيلاني',
-  'منى بنت أحمد المعمرية',
-  'عبدالله بن جاسم المخيني',
-  'مؤسسة صور الخيرية',
-  'مجموعة بهوان للخير'
+  'فاعل خير'
 ];
 
 const DEFAULT_PAYMENT_METHODS = [
@@ -77,7 +89,7 @@ const INITIAL_DB: AppDatabase = {
 
 // Isolated Storage Service to abstract DB operations
 export class DatabaseService {
-  private static loadDB(): AppDatabase {
+  private static loadDB(): AppDatabase & { projects?: CharityProject[] } {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
       if (data) {
@@ -89,14 +101,17 @@ export class DatabaseService {
           paymentMethods: parsed.paymentMethods || DEFAULT_PAYMENT_METHODS,
           visualIdentity: { ...DEFAULT_VISUAL_IDENTITY, ...(parsed.visualIdentity || {}) },
           yearlyArchives: parsed.yearlyArchives || [],
-          backups: parsed.backups || []
+          backups: parsed.backups || [],
+          projects: parsed.projects || DEFAULT_PROJECTS
         };
       }
     } catch (e) {
       console.error('Error loading database', e);
     }
     // Return a deep clone of INITIAL_DB to avoid in-memory reference pollution
-    return JSON.parse(JSON.stringify(INITIAL_DB));
+    const dbClone = JSON.parse(JSON.stringify(INITIAL_DB));
+    dbClone.projects = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
+    return dbClone;
   }
 
   private static saveDB(db: AppDatabase): void {
@@ -297,7 +312,8 @@ export class DatabaseService {
         paymentMethods: parsed.paymentMethods,
         visualIdentity: { ...DEFAULT_VISUAL_IDENTITY, ...parsed.visualIdentity },
         yearlyArchives: parsed.yearlyArchives,
-        backups: preserveBackups ? (updatedBackups.length > 0 ? updatedBackups : (parsed.backups || [])) : (parsed.backups || [])
+        backups: preserveBackups ? (updatedBackups.length > 0 ? updatedBackups : (parsed.backups || [])) : (parsed.backups || []),
+        projects: parsed.projects || currentDb.projects || DEFAULT_PROJECTS
       });
 
       return { success: true };
@@ -415,6 +431,7 @@ export class DatabaseService {
       db.paymentMethods = snapshot.paymentMethods || [];
       db.visualIdentity = snapshot.visualIdentity || db.visualIdentity;
       db.yearlyArchives = snapshot.yearlyArchives || [];
+      db.projects = snapshot.projects || db.projects || DEFAULT_PROJECTS;
       
       // Save updated state, keeping current list of backups intact so the user can still access other backups.
       this.saveDB(db);
@@ -435,6 +452,116 @@ export class DatabaseService {
     } catch (e: any) {
       console.error('Error deleting backup', e);
       return { success: false, error: e.message || 'خطأ أثناء حذف النسخة الاحتياطية' };
+    }
+  }
+
+  // --- Projects Helper Methods ---
+  public static getProjects(): CharityProject[] {
+    const db = this.loadDB();
+    return db.projects || DEFAULT_PROJECTS;
+  }
+
+  public static saveProjects(projects: CharityProject[]): void {
+    const db = this.loadDB();
+    db.projects = projects;
+    this.saveDB(db);
+  }
+
+  public static addProject(name: string, description?: string): { success: boolean; error?: string; project?: CharityProject } {
+    const db = this.loadDB();
+    const projects = db.projects || [...DEFAULT_PROJECTS];
+    const cleanName = name.trim();
+    if (!cleanName) {
+      return { success: false, error: 'يجب إدخال اسم المشروع.' };
+    }
+    
+    // Normalization check for duplicate active project names
+    const duplicate = projects.some(p => p.isActive && p.name.trim() === cleanName);
+    if (duplicate) {
+      return { success: false, error: 'يوجد مشروع نشط آخر بنفس الاسم.' };
+    }
+    
+    const newProject: CharityProject = {
+      id: `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: cleanName,
+      description: description?.trim() || '',
+      isActive: true,
+      createdAt: new Date().toISOString()
+    };
+    
+    projects.push(newProject);
+    db.projects = projects;
+    this.saveDB(db);
+    return { success: true, project: newProject };
+  }
+
+  public static updateProject(id: string, updatedData: Partial<Omit<CharityProject, 'id' | 'createdAt'>>): { success: boolean; error?: string } {
+    const db = this.loadDB();
+    const projects = db.projects || [...DEFAULT_PROJECTS];
+    const index = projects.findIndex(p => p.id === id);
+    if (index === -1) {
+      return { success: false, error: 'المشروع غير موجود.' };
+    }
+    
+    if (id === 'proj_general' && updatedData.isActive === false) {
+      return { success: false, error: 'لا يمكن إلغاء تنشيط المشروع الافتراضي (تبرع عام / غير مخصص).' };
+    }
+
+    if (updatedData.name) {
+      const cleanName = updatedData.name.trim();
+      if (!cleanName) {
+        return { success: false, error: 'يجب إدخال اسم المشروع.' };
+      }
+      const duplicate = projects.some(p => p.id !== id && p.isActive && p.name.trim() === cleanName);
+      if (duplicate) {
+        return { success: false, error: 'يوجد مشروع نشط آخر بنفس الاسم.' };
+      }
+    }
+
+    const originalProject = projects[index];
+    const updatedProject: CharityProject = {
+      ...originalProject,
+      ...updatedData,
+      updatedAt: new Date().toISOString()
+    };
+    
+    projects[index] = updatedProject;
+    db.projects = projects;
+    this.saveDB(db);
+    return { success: true };
+  }
+
+  public static deleteProject(id: string): { success: boolean; error?: string; deleted?: boolean; deactivated?: boolean } {
+    const db = this.loadDB();
+    const projects = db.projects || [...DEFAULT_PROJECTS];
+    const project = projects.find(p => p.id === id);
+    if (!project) {
+      return { success: false, error: 'المشروع غير موجود.' };
+    }
+    
+    if (id === 'proj_general') {
+      return { success: false, error: 'لا يمكن حذف المشروع الافتراضي (تبرع عام / غير مخصص).' };
+    }
+    
+    // Check if project is used in any vouchers (active vouchers or archived vouchers)
+    const isUsedInActive = db.vouchers.some(v => v.projectId === id);
+    const isUsedInArchived = (db.yearlyArchives || []).some(archive => 
+      (archive.receiptVouchers || []).some(v => v.projectId === id) ||
+      (archive.expenseVouchers || []).some(v => v.projectId === id)
+    );
+    
+    if (isUsedInActive || isUsedInArchived) {
+      // Just deactivate it
+      project.isActive = false;
+      project.updatedAt = new Date().toISOString();
+      db.projects = projects;
+      this.saveDB(db);
+      return { success: true, deactivated: true, error: 'تم إيقاف تفعيل المشروع بدلاً من حذفه لأنه مستخدم في سجلات سابقة.' };
+    } else {
+      // Delete completely
+      db.projects = projects.filter(p => p.id !== id);
+      this.saveDB(db);
+      return { success: true, deleted: true };
     }
   }
 }

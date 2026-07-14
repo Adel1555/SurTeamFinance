@@ -51,6 +51,7 @@ import PrintVoucher from './components/PrintVoucher';
 import PrintFilteredVouchers from './components/PrintFilteredVouchers';
 import VoucherDetailsModal from './components/VoucherDetailsModal';
 import Logo from './components/Logo';
+import SponsorsPanel from './components/SponsorsPanel';
 
 // Icons
 import { 
@@ -79,10 +80,11 @@ import {
   Download,
   FileText,
   FileSpreadsheet,
-  X
+  X,
+  Heart
 } from 'lucide-react';
 
-type TabType = 'dashboard' | 'receipt' | 'payment' | 'archive' | 'reports' | 'visual' | 'settings';
+type TabType = 'dashboard' | 'receipt' | 'payment' | 'archive' | 'reports' | 'visual' | 'settings' | 'sponsors';
 
 export default function App() {
   // Sync DB variables
@@ -391,13 +393,15 @@ export default function App() {
         return !!currentPermissions.changeIdentity;
       case 'settings':
         return !!currentPermissions.accessSettings;
+      case 'sponsors':
+        return !!currentPermissions.viewSponsorsDonations;
       default:
         return true;
     }
   };
 
   const permittedTabs = useMemo<TabType[]>(() => {
-    const tabs: TabType[] = ['dashboard', 'receipt', 'payment', 'archive', 'reports', 'visual', 'settings'];
+    const tabs: TabType[] = ['dashboard', 'receipt', 'payment', 'archive', 'reports', 'visual', 'settings', 'sponsors'];
     return tabs.filter(t => isTabPermitted(t));
   }, [currentPermissions, isManagerMode]);
 
@@ -1216,6 +1220,31 @@ export default function App() {
                   <span className="text-[10px] opacity-65" style={{ color: activeTab === 'reports' ? 'var(--button-text)' : 'var(--text-secondary)' }}>مفصل</span>
                 </button>
               )}
+
+              {/* Tab Sponsors & Donations */}
+              {isTabPermitted('sponsors') && (
+                <button
+                  onClick={() => setActiveTab('sponsors')}
+                  className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
+                    activeTab === 'sponsors' 
+                      ? 'shadow-md font-extrabold' 
+                      : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
+                  }`}
+                  style={activeTab === 'sponsors' ? { 
+                    backgroundColor: 'var(--sidebar-active)',
+                    color: 'var(--button-text)',
+                    boxShadow: '0 4.5px 14px var(--card-glow)'
+                  } : {
+                    color: 'var(--sidebar-text)'
+                  }}
+                >
+                  <div className="flex items-center gap-2 flex-row-reverse">
+                    <Heart className="w-4 h-4 text-rose-500 animate-pulse" />
+                    <span>الرعاة والتبرعات</span>
+                  </div>
+                  <span className="text-[9px] bg-rose-500/15 text-rose-600 px-1.5 py-0.5 rounded font-black">حصري</span>
+                </button>
+              )}
  
               {/* Tab 6: Flexible Visual Identity */}
               {isTabPermitted('visual') && (
@@ -1501,6 +1530,18 @@ export default function App() {
               <VisualIdentityPanel
                 config={identity}
                 onUpdate={(newConfig) => setIdentity(newConfig)}
+              />
+            </div>
+          )}
+
+          {activeTab === 'sponsors' && isTabPermitted('sponsors') && (
+            <div>
+              <SponsorsPanel
+                vouchers={vouchers}
+                identity={identity}
+                currentPermissions={currentPermissions}
+                isManagerMode={isManagerMode}
+                onViewVoucher={handleViewVoucher}
               />
             </div>
           )}

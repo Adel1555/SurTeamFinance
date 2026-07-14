@@ -24,6 +24,8 @@ export interface Voucher {
   notes: string;
   createdAt: number;
   attachments?: AttachmentMetadata[];
+  projectId?: string;
+  projectNameSnapshot?: string;
 }
 
 export type ButtonStyle = 'rounded' | 'sharp' | 'pill';
@@ -89,6 +91,15 @@ export interface AutoBackupSnapshot {
   dbData: AppDatabase & { attachments_media_folder?: Record<string, string> };
 }
 
+export interface CharityProject {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface AppDatabase {
   vouchers: Voucher[];
   payersList: string[]; // Premade list of payers/donors
@@ -96,6 +107,7 @@ export interface AppDatabase {
   visualIdentity: VisualIdentity;
   yearlyArchives?: YearlyArchive[];
   backups?: AutoBackup[];
+  projects?: CharityProject[];
 }
 
 export interface YearlyArchive {
@@ -137,4 +149,8 @@ export interface EmployeePermissions {
   showMainDashboard: boolean;    // إظهار الواجهة الرئيسية
   checkUpdates: boolean;         // التحقق من التحديثات
   managePermissions: boolean;    // إدارة الصلاحيات
+  viewSponsorsDonations?: boolean;      // عرض قسم الرعاة والتبرعات
+  viewProjectFinancialTotals?: boolean; // عرض إجماليات المشاريع وأرصدتها
+  exportSponsorProjectReports?: boolean;// طباعة وتصدير تقارير الرعاة والمشاريع
+  manageProjects?: boolean;             // إدارة المشاريع والمبادرات
 }

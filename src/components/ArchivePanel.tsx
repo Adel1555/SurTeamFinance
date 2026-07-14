@@ -8,6 +8,7 @@ import { Voucher, VisualIdentity, VoucherType, EmployeePermissions } from '../ty
 import { formatDate, formatOMR } from '../utils';
 import { Search, Filter, Trash2, Printer, FileText, ArrowUpRight, ArrowDownRight, ArrowUpDown, RefreshCw, Calendar, ListFilter, Eye, Pencil } from 'lucide-react';
 import PrintFilteredVouchers from './PrintFilteredVouchers';
+import { DatabaseService } from '../db';
 
 interface ArchivePanelProps {
   vouchers: Voucher[];
@@ -26,6 +27,8 @@ export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPr
   
   // Custom state for showing the print report
   const [showPrintReport, setShowPrintReport] = useState(false);
+
+  const projectsList = useMemo(() => DatabaseService.getProjects(), [vouchers]);
 
   const currentPermissions = (() => {
     if (isManagerMode) {
@@ -551,6 +554,7 @@ export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPr
                 <th className="p-3.5 pr-5">رقم السند</th>
                 <th className="p-3.5 text-center">النوع</th>
                 <th className="p-3.5">تاريخ التدوين</th>
+                <th className="p-3.5">المشروع الخيرى</th>
                 <th className="p-3.5">الدافع / المستفيد غائياً</th>
                 <th className="p-3.5">البيان (وذلك عن)</th>
                 <th className="p-3.5">طريقة التحصيل</th>
@@ -585,6 +589,13 @@ export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPr
                     {/* Gregorian date */}
                     <td className="p-3.5 text-gray-500 dark:text-gray-400 font-medium">
                       {v.date}
+                    </td>
+
+                    {/* Project */}
+                    <td className="p-3.5 text-gray-700 dark:text-zinc-300 font-bold">
+                      <span className="bg-slate-150/40 dark:bg-zinc-900/80 px-2 py-0.5 rounded border border-gray-200/50 dark:border-zinc-800 text-[10px]">
+                        {v.projectNameSnapshot || (projectsList.find(p => p.id === v.projectId)?.name) || "تبرع عام / غير مخصص"}
+                      </span>
                     </td>
 
                     {/* Person */}
