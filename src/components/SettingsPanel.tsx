@@ -5,16 +5,20 @@
 
 import React, { useState } from 'react';
 import { DatabaseService } from '../db';
-import { VisualIdentity, YearlyArchive, Voucher, AppDatabase, EmployeePermissions, AutoBackupSnapshot, CharityProject } from '../types';
+import { VisualIdentity, YearlyArchive, Voucher, AppDatabase, EmployeePermissions, AutoBackupSnapshot, CharityProject, WorkspaceConfig } from '../types';
 import { formatOMR, formatDate, restoreLatestInternalAutoBackup, deleteInternalAutoBackups } from '../utils';
-import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle, Shield, RotateCcw, Save, ShieldCheck, Eye, Printer, FileText, FileSpreadsheet, Paperclip, Sliders, Database, RotateCw, BarChart2, Heart, ArrowUp, ArrowDown, Plus, CheckCircle, XCircle, Search } from 'lucide-react';
+import { Settings, UserPlus, CreditCard, Trash2, Edit2, ShieldAlert, Check, RefreshCw, Upload, Download, AlertTriangle, X, Sparkles, History, Calendar, FolderOpen, HelpCircle, Shield, RotateCcw, Save, ShieldCheck, Eye, Printer, FileText, FileSpreadsheet, Paperclip, Sliders, Database, RotateCw, BarChart2, Heart, ArrowUp, ArrowDown, Plus, CheckCircle, XCircle, Search, Layout } from 'lucide-react';
 import { AttachmentStorageService } from './AttachmentStorageService';
 import Logo from './Logo';
+import WorkspaceControlPanel from './WorkspaceControlPanel';
 
 interface SettingsPanelProps {
   onDatabaseReseted: () => void;
   identity: VisualIdentity;
   onIdentityUpdate: (newConfig: VisualIdentity) => void;
+  workspaceConfig?: WorkspaceConfig;
+  onWorkspaceUpdate?: (newConfig: WorkspaceConfig) => void;
+  onWorkspaceReset?: () => void;
   currentVersion: string;
   updateState: {
     updateAvailable: boolean;
@@ -74,6 +78,9 @@ export default function SettingsPanel({
   onDatabaseReseted, 
   identity, 
   onIdentityUpdate,
+  workspaceConfig,
+  onWorkspaceUpdate,
+  onWorkspaceReset,
   currentVersion,
   updateState,
   isCheckingUpdates,
@@ -995,6 +1002,17 @@ export default function SettingsPanel({
 
           </div>
         </div>
+
+        {/* Workspace Customization Section */}
+        {workspaceConfig && onWorkspaceUpdate && onWorkspaceReset && (
+          <div className="lg:col-span-12">
+            <WorkspaceControlPanel 
+              config={workspaceConfig} 
+              onUpdate={onWorkspaceUpdate} 
+              onReset={onWorkspaceReset} 
+            />
+          </div>
+        )}
 
         {/* Employee Permissions Section (Only visible in Manager Mode) */}
         {isManagerMode && (

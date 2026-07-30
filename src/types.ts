@@ -50,6 +50,13 @@ export interface VisualIdentity {
   // Modern Theme Central Properties
   themeMode?: 'light' | 'dark' | 'custom';
   selectedThemeName?: string;
+  customThemes?: Array<{
+    id: string;
+    name: string;
+    desc: string;
+    mode: 'light' | 'dark';
+    colors: Record<string, string>;
+  }>;
   
   // Custom theme colors for entire application:
   appBg?: string;
@@ -66,15 +73,40 @@ export interface VisualIdentity {
   frameBorder?: string;
   tableHeaderBg?: string;
   tableRowBg?: string;
+  tableRowHoverBg?: string;
+  tableRowActiveBg?: string;
   textMain?: string;
   textSecondary?: string;
   buttonBg?: string;
   buttonText?: string;
   buttonHover?: string;
+  buttonSecondaryBg?: string;
+  buttonSecondaryText?: string;
+  buttonSecondaryHover?: string;
+  buttonDangerBg?: string;
+  buttonDangerText?: string;
+  buttonDangerHover?: string;
+  buttonSuccessBg?: string;
+  buttonSuccessText?: string;
+  buttonSuccessHover?: string;
+  buttonWarningBg?: string;
   inputBg?: string;
   inputBorder?: string;
+  inputFocus?: string;
   dialogBg?: string;
   dialogBorder?: string;
+  menuBg?: string;
+  menuBorder?: string;
+  tabBg?: string;
+  tabActiveBg?: string;
+  linkColor?: string;
+  iconColor?: string;
+  chartPrimary?: string;
+  chartSecondary?: string;
+  progressBarBg?: string;
+  progressFill?: string;
+  scrollbarThumb?: string;
+  scrollbarTrack?: string;
 }
 
 export interface AutoBackup {
@@ -122,6 +154,33 @@ export interface YearlyArchive {
   expenseCount: number;
   createdAt: number;
 }
+
+export type WorkspacePreset = 'classic' | 'compact' | 'wide' | 'large' | 'laptop';
+export type WorkspaceDensity = 'comfortable' | 'compact' | 'spacious';
+
+export interface WorkspaceConfig {
+  preset: WorkspacePreset;
+  sidebarWidth: number; // in px e.g. 260
+  sidebarVisible: boolean;
+  toolbarVisible: boolean;
+  statsVisible: boolean;
+  quickActionsVisible: boolean;
+  cardOrder: string[]; // ['stats', 'quick-actions', 'charts', 'recent-vouchers']
+  density: WorkspaceDensity;
+  containerMaxWidth: 'normal' | 'wide' | 'full'; // max-w-7xl, max-w-[1600px], w-full
+}
+
+export const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfig = {
+  preset: 'classic',
+  sidebarWidth: 260,
+  sidebarVisible: true,
+  toolbarVisible: true,
+  statsVisible: true,
+  quickActionsVisible: true,
+  cardOrder: ['stats', 'quick-actions', 'charts', 'recent-vouchers'],
+  density: 'comfortable',
+  containerMaxWidth: 'normal'
+};
 
 export interface EmployeePermissions {
   createReceipt: boolean;        // إنشاء سند قبض

@@ -5,10 +5,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { DatabaseService } from './db';
-import { Voucher, VisualIdentity, EmployeePermissions } from './types';
+import { Voucher, VisualIdentity, EmployeePermissions, WorkspaceConfig } from './types';
+import { getResolvedThemeColors } from './themes';
 import { formatOMR, isVersionNewer, hashPassword, exportToExcelCSV, createInternalAutoBackup } from './utils';
 import packageJson from '../package.json';
 import { AttachmentStorageService } from './components/AttachmentStorageService';
+import WorkspaceControlPanel from './components/WorkspaceControlPanel';
 
 const DEFAULT_PERMISSIONS: EmployeePermissions = {
   createReceipt: true,
@@ -81,10 +83,14 @@ import {
   FileText,
   FileSpreadsheet,
   X,
-  Heart
+  Heart,
+  Layout,
+  PanelRightClose,
+  PanelRightOpen,
+  Grid
 } from 'lucide-react';
 
-type TabType = 'dashboard' | 'receipt' | 'payment' | 'archive' | 'reports' | 'visual' | 'settings' | 'sponsors';
+type TabType = 'dashboard' | 'receipt' | 'payment' | 'archive' | 'reports' | 'visual' | 'settings' | 'sponsors' | 'workspace';
 
 export default function App() {
   // Sync DB variables
@@ -98,8 +104,29 @@ export default function App() {
   });
   const [identity, setIdentity] = useState<VisualIdentity>(() => DatabaseService.getVisualIdentity());
 
+  // Workspace configuration state
+  const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig>(() => DatabaseService.getWorkspaceConfig());
+
+  const handleUpdateWorkspaceConfig = (newConfig: WorkspaceConfig) => {
+    setWorkspaceConfig(newConfig);
+    DatabaseService.saveWorkspaceConfig(newConfig);
+  };
+
+  const handleResetWorkspaceConfig = () => {
+    const defaultConfig = DatabaseService.getWorkspaceConfig(); // Fallback
+    setWorkspaceConfig(defaultConfig);
+    DatabaseService.saveWorkspaceConfig(defaultConfig);
+  };
+
+  const handleToggleSidebar = () => {
+    const updated = { ...workspaceConfig, sidebarVisible: !workspaceConfig.sidebarVisible };
+    setWorkspaceConfig(updated);
+    DatabaseService.saveWorkspaceConfig(updated);
+  };
+
   // Navigation state
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [archiveDateFilter, setArchiveDateFilter] = useState<{ from: string; to: string } | null>(null);
 
   // Trigger state for refresh button
   const [refreshKey, setRefreshKey] = useState(0);
@@ -401,7 +428,7 @@ export default function App() {
   };
 
   const permittedTabs = useMemo<TabType[]>(() => {
-    const tabs: TabType[] = ['dashboard', 'receipt', 'payment', 'archive', 'reports', 'visual', 'settings', 'sponsors'];
+    const tabs: TabType[] = ['dashboard', 'receipt', 'payment', 'archive', 'reports', 'sponsors', 'workspace', 'visual', 'settings'];
     return tabs.filter(t => isTabPermitted(t));
   }, [currentPermissions, isManagerMode]);
 
@@ -791,70 +818,73 @@ export default function App() {
 
   // Dynamic CSS variables setup based on identity config and fallback theme states
   const themeStyles = useMemo(() => {
-    // Current Active Colors with Fallbacks
-    const appBg = identity.appBg || (isDarkMode ? '#0b1f3a' : '#eaf6ff');
-    const headerBg = identity.headerBg || (isDarkMode ? '#0c203b' : '#ffffff');
-    const headerText = identity.headerText || (isDarkMode ? '#ffffff' : '#0c203b');
-    const sidebarBg = identity.sidebarBg || (isDarkMode ? '#0c203b' : '#ffffff');
-    const sidebarText = identity.sidebarText || (isDarkMode ? '#94a3b8' : '#334155');
-    const sidebarActive = identity.sidebarActive || identity.primaryColor || '#0f766e';
-    const footerBg = identity.footerBg || (isDarkMode ? '#0c203b' : '#ffffff');
-    const footerText = identity.footerText || (isDarkMode ? '#64748b' : '#475569');
-    
-    const cardBg = identity.cardBg || (isDarkMode ? '#0d2342' : '#ffffff');
-    const cardBorder = identity.cardBorder || (isDarkMode ? '#1e293b' : '#dbeafe');
-    const cardGlow = identity.cardGlow || (isDarkMode ? 'rgba(14, 165, 233, 0.15)' : 'rgba(15, 118, 110, 0.12)');
-    const frameBorder = identity.frameBorder || (isDarkMode ? '#1e3a8a' : '#bfdbfe');
-    
-    const tableHeaderBg = identity.tableHeaderBg || (isDarkMode ? '#112b4a' : '#eff6ff');
-    const tableRowBg = identity.tableRowBg || (isDarkMode ? '#0d2342' : '#ffffff');
-    
-    const textMain = identity.textMain || (isDarkMode ? '#f8fafc' : '#0f172a');
-    const textSecondary = identity.textSecondary || (isDarkMode ? '#94a3b8' : '#64748b');
-    
-    const buttonBg = identity.buttonBg || identity.primaryColor || '#0f766e';
-    const buttonText = identity.buttonText || '#ffffff';
-    const buttonHover = identity.buttonHover || identity.secondaryColor || '#115e59';
-    
-    const inputBg = identity.inputBg || (isDarkMode ? '#0b1f3a' : '#ffffff');
-    const inputBorder = identity.inputBorder || (isDarkMode ? '#112b4a' : '#cbd5e1');
-    
-    const dialogBg = identity.dialogBg || (isDarkMode ? '#0b1f3a' : '#ffffff');
-    const dialogBorder = identity.dialogBorder || (isDarkMode ? '#1e3a8a' : '#dbeafe');
+    const tc = getResolvedThemeColors(identity, isDarkMode);
 
     return `
       :root, .dark, .light, body {
-        --app-bg: ${appBg} !important;
-        --header-bg: ${headerBg} !important;
-        --header-text: ${headerText} !important;
-        --sidebar-bg: ${sidebarBg} !important;
-        --sidebar-text: ${sidebarText} !important;
-        --sidebar-active: ${sidebarActive} !important;
-        --footer-bg: ${footerBg} !important;
-        --footer-text: ${footerText} !important;
-        --card-bg: ${cardBg} !important;
-        --card-border: ${cardBorder} !important;
-        --card-glow: ${cardGlow} !important;
-        --frame-border: ${frameBorder} !important;
-        --table-header-bg: ${tableHeaderBg} !important;
-        --table-row-bg: ${tableRowBg} !important;
-        --text-main: ${textMain} !important;
-        --text-secondary: ${textSecondary} !important;
-        --button-bg: ${buttonBg} !important;
-        --button-text: ${buttonText} !important;
-        --button-hover: ${buttonHover} !important;
-        --input-bg: ${inputBg} !important;
-        --input-border: ${inputBorder} !important;
-        --dialog-bg: ${dialogBg} !important;
-        --dialog-border: ${dialogBorder} !important;
-        --primary-color: ${buttonBg} !important;
-        --secondary-color: ${buttonHover} !important;
+        --app-bg: ${tc.appBg} !important;
+        --header-bg: ${tc.headerBg} !important;
+        --header-text: ${tc.headerText} !important;
+        --sidebar-bg: ${tc.sidebarBg} !important;
+        --sidebar-text: ${tc.sidebarText} !important;
+        --sidebar-active: ${tc.sidebarActive} !important;
+        --footer-bg: ${tc.footerBg} !important;
+        --footer-text: ${tc.footerText} !important;
+        --card-bg: ${tc.cardBg} !important;
+        --card-border: ${tc.cardBorder} !important;
+        --card-glow: ${tc.cardGlow} !important;
+        --frame-border: ${tc.frameBorder} !important;
+        --table-header-bg: ${tc.tableHeaderBg} !important;
+        --table-row-bg: ${tc.tableRowBg} !important;
+        --table-row-hover-bg: ${tc.tableRowHoverBg} !important;
+        --table-row-active-bg: ${tc.tableRowActiveBg} !important;
+        --text-main: ${tc.textMain} !important;
+        --text-secondary: ${tc.textSecondary} !important;
+        --button-bg: ${tc.buttonBg} !important;
+        --button-text: ${tc.buttonText} !important;
+        --button-hover: ${tc.buttonHover} !important;
+        --button-secondary-bg: ${tc.buttonSecondaryBg} !important;
+        --button-secondary-text: ${tc.buttonSecondaryText} !important;
+        --button-secondary-hover: ${tc.buttonSecondaryHover} !important;
+        --button-danger-bg: ${tc.buttonDangerBg} !important;
+        --button-danger-text: ${tc.buttonDangerText} !important;
+        --button-danger-hover: ${tc.buttonDangerHover} !important;
+        --button-success-bg: ${tc.buttonSuccessBg} !important;
+        --button-success-text: ${tc.buttonSuccessText} !important;
+        --button-success-hover: ${tc.buttonSuccessHover} !important;
+        --button-warning-bg: ${tc.buttonWarningBg} !important;
+        --input-bg: ${tc.inputBg} !important;
+        --input-border: ${tc.inputBorder} !important;
+        --input-focus: ${tc.inputFocus} !important;
+        --dialog-bg: ${tc.dialogBg} !important;
+        --dialog-border: ${tc.dialogBorder} !important;
+        --menu-bg: ${tc.menuBg} !important;
+        --menu-border: ${tc.menuBorder} !important;
+        --tab-bg: ${tc.tabBg} !important;
+        --tab-active-bg: ${tc.tabActiveBg} !important;
+        --link-color: ${tc.linkColor} !important;
+        --icon-color: ${tc.iconColor} !important;
+        --chart-primary: ${tc.chartPrimary} !important;
+        --chart-secondary: ${tc.chartSecondary} !important;
+        --progress-bar-bg: ${tc.progressBarBg} !important;
+        --progress-fill: ${tc.progressFill} !important;
+        --scrollbar-thumb: ${tc.scrollbarThumb} !important;
+        --scrollbar-track: ${tc.scrollbarTrack} !important;
+        --primary-color: ${tc.buttonBg} !important;
+        --secondary-color: ${tc.buttonHover} !important;
       }
       
       body, .min-h-screen, .bg-light-finance, .bg-dark-finance {
         background-color: var(--app-bg) !important;
         background-image: none !important;
         color: var(--text-main) !important;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background-color: var(--scrollbar-thumb) !important;
+      }
+      ::-webkit-scrollbar-track {
+        background-color: var(--scrollbar-track) !important;
       }
       
       header {
@@ -865,6 +895,47 @@ export default function App() {
       
       header * {
         color: var(--header-text) !important;
+      }
+
+      tr:hover td {
+        background-color: var(--table-row-hover-bg) !important;
+      }
+
+      tr.selected td, tr.active td {
+        background-color: var(--table-row-active-bg) !important;
+      }
+
+      a {
+        color: var(--link-color) !important;
+      }
+
+      input:focus, select:focus, textarea:focus {
+        border-color: var(--input-focus) !important;
+        outline-color: var(--input-focus) !important;
+      }
+
+      .theme-btn-secondary {
+        background-color: var(--button-secondary-bg) !important;
+        color: var(--button-secondary-text) !important;
+      }
+      .theme-btn-secondary:hover {
+        background-color: var(--button-secondary-hover) !important;
+      }
+
+      .theme-btn-danger {
+        background-color: var(--button-danger-bg) !important;
+        color: var(--button-danger-text) !important;
+      }
+      .theme-btn-danger:hover {
+        background-color: var(--button-danger-hover) !important;
+      }
+
+      .theme-btn-success {
+        background-color: var(--button-success-bg) !important;
+        color: var(--button-success-text) !important;
+      }
+      .theme-btn-success:hover {
+        background-color: var(--button-success-hover) !important;
       }
       
       nav .finance-glow-card {
@@ -1047,6 +1118,34 @@ export default function App() {
                 </>
               )}
             </button>
+
+            {/* Sidebar Visibility Toggle Button */}
+            <button
+              onClick={handleToggleSidebar}
+              title={workspaceConfig.sidebarVisible ? "إخفاء الشريط الجانبي" : "إظهار الشريط الجانبي"}
+              className="p-2.5 rounded-xl text-gray-500 hover:text-gray-950 dark:hover:text-white bg-gray-100/70 dark:bg-zinc-900/60 hover:bg-gray-200/80 dark:hover:bg-zinc-805 transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+            >
+              {workspaceConfig.sidebarVisible ? (
+                <PanelRightClose className="w-4 h-4 text-sky-600" />
+              ) : (
+                <PanelRightOpen className="w-4 h-4 text-emerald-500 animate-pulse" />
+              )}
+              <span className="text-[10px] hidden lg:inline">{workspaceConfig.sidebarVisible ? "القائمة" : "القائمة"}</span>
+            </button>
+
+            {/* Quick Workspace Settings button */}
+            <button
+              onClick={() => setActiveTab('workspace')}
+              title="تخصيص تخطيط الواجهة (Workspace Layout)"
+              className={`p-2.5 rounded-xl transition-all active:scale-95 flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                activeTab === 'workspace'
+                  ? 'bg-[var(--primary-color)] text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-950 dark:hover:text-white bg-gray-100/70 dark:bg-zinc-900/60 hover:bg-gray-200/80'
+              }`}
+            >
+              <Layout className="w-4 h-4 text-sky-500" />
+              <span className="text-[10px] hidden lg:inline">تخطيط الواجهة</span>
+            </button>
           </div>
 
           {/* Right Area: Branding */}
@@ -1069,51 +1168,58 @@ export default function App() {
       </header>
 
       {/* Primary Container Wrap */}
-      <main className="max-w-7xl mx-auto px-4 md:px-6 mt-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-6 print:p-0 print:m-0 print:max-w-none">
+      <main className={`${
+        workspaceConfig.containerMaxWidth === 'full' 
+          ? 'w-full px-4 md:px-8' 
+          : workspaceConfig.containerMaxWidth === 'wide' 
+            ? 'max-w-[1600px] mx-auto px-4 md:px-8' 
+            : 'max-w-7xl mx-auto px-4 md:px-6'
+      } mt-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-6 print:p-0 print:m-0 print:max-w-none`}>
         
-        {/* Navigation Sidebar Drawer (Hidden on standard Print) */}
-        <nav className="lg:col-span-3 space-y-3 print:hidden">
-          
-          <div className={`p-5 ${cardStyleClass} ${containerRadius} border border-gray-200/60 dark:border-zinc-800/65 shadow-md space-y-4 premium-border-glow duration-500`}>
+        {/* Navigation Sidebar Drawer (Hidden on standard Print or if toggled hidden) */}
+        {workspaceConfig.sidebarVisible && (
+          <nav className="lg:col-span-3 space-y-3 print:hidden">
             
-            {/* Elegant Official Logo Header at the top of the Sidebar */}
-            <div className="flex flex-col items-center justify-center p-3.5 bg-gray-50/50 dark:bg-zinc-900/40 rounded-2xl border border-gray-100/70 dark:border-zinc-800/30 mb-2">
-              <Logo size={68} showText={true} customLogo={identity.customLogo} />
-            </div>
-
-            {/* Nav Header Title */}
-            <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 dark:text-zinc-500 block text-right border-b border-gray-100/80 dark:border-zinc-800/50 pb-2 flex items-center justify-between">
-              <Compass className="w-3.5 h-3.5" />
-              أقسام ووظائف البرنامج
-            </span>
-
-            {/* Sidebar Tab buttons */}
-            <div className="flex flex-col gap-1.5 text-right">
+            <div className={`p-5 ${cardStyleClass} ${containerRadius} border border-gray-200/60 dark:border-zinc-800/65 shadow-md space-y-4 premium-border-glow duration-500`}>
               
-              {/* Tab 1: Dashboard */}
-              {isTabPermitted('dashboard') && (
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
-                    activeTab === 'dashboard' 
-                      ? 'shadow-md font-extrabold' 
-                      : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
-                  }`}
-                  style={activeTab === 'dashboard' ? { 
-                    backgroundColor: 'var(--sidebar-active)',
-                    color: 'var(--button-text)',
-                    boxShadow: '0 4.5px 14px var(--card-glow)'
-                  } : {
-                    color: 'var(--sidebar-text)'
-                  }}
-                >
-                  <div className="flex items-center gap-2 flex-row-reverse">
-                    <BarChart3 className="w-4 h-4" />
-                    <span>الواجهة الرئيسية</span>
-                  </div>
-                  <span className="text-[10px] font-mono opacity-80" style={{ color: activeTab === 'dashboard' ? 'var(--button-text)' : 'var(--text-secondary)' }}>{vouchers.length}</span>
-                </button>
-              )}
+              {/* Elegant Official Logo Header at the top of the Sidebar */}
+              <div className="flex flex-col items-center justify-center p-3.5 bg-gray-50/50 dark:bg-zinc-900/40 rounded-2xl border border-gray-100/70 dark:border-zinc-800/30 mb-2">
+                <Logo size={68} showText={true} customLogo={identity.customLogo} />
+              </div>
+
+              {/* Nav Header Title */}
+              <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 dark:text-zinc-500 block text-right border-b border-gray-100/80 dark:border-zinc-800/50 pb-2 flex items-center justify-between">
+                <Compass className="w-3.5 h-3.5" />
+                أقسام ووظائف البرنامج
+              </span>
+
+              {/* Sidebar Tab buttons */}
+              <div className="flex flex-col gap-1.5 text-right">
+                
+                {/* Tab 1: Dashboard */}
+                {isTabPermitted('dashboard') && (
+                  <button
+                    onClick={() => setActiveTab('dashboard')}
+                    className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
+                      activeTab === 'dashboard' 
+                        ? 'shadow-md font-extrabold' 
+                        : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
+                    }`}
+                    style={activeTab === 'dashboard' ? { 
+                      backgroundColor: 'var(--sidebar-active)',
+                      color: 'var(--button-text)',
+                      boxShadow: '0 4.5px 14px var(--card-glow)'
+                    } : {
+                      color: 'var(--sidebar-text)'
+                    }}
+                  >
+                    <div className="flex items-center gap-2 flex-row-reverse">
+                      <BarChart3 className="w-4 h-4" />
+                      <span>الواجهة الرئيسية</span>
+                    </div>
+                    <span className="text-[10px] font-mono opacity-80" style={{ color: activeTab === 'dashboard' ? 'var(--button-text)' : 'var(--text-secondary)' }}>{vouchers.length}</span>
+                  </button>
+                )}
  
               {/* Tab 2: New Receipt */}
               {isTabPermitted('receipt') && (
@@ -1270,6 +1376,31 @@ export default function App() {
                   <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                 </button>
               )}
+
+              {/* Tab Workspace Customization */}
+              {isTabPermitted('workspace') && (
+                <button
+                  onClick={() => setActiveTab('workspace')}
+                  className={`w-full py-2.5 px-4 text-xs font-bold transition-all duration-300 flex items-center justify-between flex-row-reverse cursor-pointer ${buttonRadius} ${
+                    activeTab === 'workspace' 
+                      ? 'shadow-md font-extrabold' 
+                      : 'hover:bg-[var(--input-bg)] hover:translate-x-[-4px]'
+                  }`}
+                  style={activeTab === 'workspace' ? { 
+                    backgroundColor: 'var(--sidebar-active)',
+                    color: 'var(--button-text)',
+                    boxShadow: '0 4.5px 14px var(--card-glow)'
+                  } : {
+                    color: 'var(--sidebar-text)'
+                  }}
+                >
+                  <div className="flex items-center gap-2 flex-row-reverse">
+                    <Layout className="w-4 h-4 text-sky-500 animate-pulse" />
+                    <span>تخطيط الواجهة (Workspace)</span>
+                  </div>
+                  <span className="text-[9px] bg-sky-500/15 text-sky-600 px-1.5 py-0.5 rounded font-black">مخصص</span>
+                </button>
+              )}
  
               <div className="border-t border-gray-100 dark:border-zinc-800/80 pt-1.5 mt-1.5" style={{ borderColor: 'var(--frame-border)' }} />
  
@@ -1324,9 +1455,10 @@ export default function App() {
           </div>
 
         </nav>
+        )}
 
         {/* Dynamic Display Area */}
-        <section className="lg:col-span-9 space-y-6 print:col-span-12">
+        <section className={`${workspaceConfig.sidebarVisible ? 'lg:col-span-9' : 'lg:col-span-12'} space-y-6 print:col-span-12`}>
           
           {permittedTabs.length === 0 ? (
             <div className={`p-8 ${cardStyleClass} ${containerRadius} border border-rose-100 dark:border-rose-500/20 bg-white/95 dark:bg-[#0c203b]/90 shadow-md text-center flex flex-col items-center justify-center space-y-4 py-16 animate-fade-in`}>
@@ -1342,89 +1474,103 @@ export default function App() {
             <div className="space-y-6 animate-fade-in print:hidden">
               
               {/* Four Readings Financial Cards */}
-              {currentPermissions.viewDashboard && (
+              {currentPermissions.viewDashboard && workspaceConfig.statsVisible && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 py-4 justify-items-center">
-                  
-                  {/* 1. Receipts total */}
-                  <div 
-                    className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-emerald"
-                    style={{ backgroundColor: '#074907' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none" />
-                    <div className="p-2 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 mb-2">
-                      <TrendingUp className="w-5 h-5 text-emerald-500 animate-pulse" />
-                    </div>
-                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#035bf4' }}>
-                      إجمالي مبالغ القبض
-                    </span>
-                    <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ borderColor: '#26c831', color: '#070ff1' }}>
-                      {formatOMR(statistics.totalReceipts)}
-                    </p>
-                    <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2" style={{ color: '#38ec08' }}>
-                      العدد: <strong className="text-emerald-500 font-mono" style={{ color: 'inherit' }}>{statistics.receiptsCount}</strong> سندات
-                    </span>
-                  </div>
-
-                  {/* 2. Payments total */}
-                  <div 
-                    className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-rose"
-                    style={{ backgroundColor: '#6a3034' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-b from-rose-500/5 to-transparent pointer-events-none" />
-                    <div className="p-2 rounded-full bg-rose-500/10 dark:bg-rose-500/20 mb-2">
-                      <TrendingDown className="w-5 h-5 text-rose-500 animate-pulse" />
-                    </div>
-                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#b74040' }}>
-                      إجمالي مبالغ الصرف
-                    </span>
-                    <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ color: '#f50c0c' }}>
-                      {formatOMR(statistics.totalPayments)}
-                    </p>
-                    <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2" style={{ color: '#2aef0a' }}>
-                      العدد: <strong className="text-rose-500 font-mono" style={{ color: 'inherit' }}>{statistics.paymentsCount}</strong> سندات
-                    </span>
-                  </div>
-
-                  {/* 3. Combined total count Vouchers */}
-                  <div 
-                    className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-indigo"
-                    style={{ backgroundColor: '#948d69' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none" />
-                    <div className="p-2 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 mb-2">
-                      <Coins className="w-5 h-5 text-indigo-500 animate-bounce" />
-                    </div>
-                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#01173e' }}>
-                      إجمالي السندات
-                    </span>
-                    <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ color: '#deee0d' }}>
-                      {statistics.totalVouchersCount} <span className="text-xs font-sans text-gray-400 dark:text-gray-500 font-bold" style={{ color: '#e3eb17' }}>سند</span>
-                    </p>
-                    <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2">
-                      سندات القبض والصرف
-                    </span>
-                  </div>
-
-                  {/* 4. Net remaining Balance */}
-                  <div 
-                    className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-primary"
-                    style={{ backgroundColor: '#7f747f' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-b from-[var(--sidebar-active)]/5 to-transparent pointer-events-none" />
-                    <div className="p-2 rounded-full bg-sky-500/10 dark:bg-sky-500/20 mb-2">
-                      <Scale className="w-5 h-5" style={{ color: identity.primaryColor || '#0284c7' }} />
-                    </div>
-                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans">
-                      صافي الرصيد المالي
-                    </span>
-                    <p className={`text-lg sm:text-xl font-black mt-1.5 font-mono tracking-tight leading-none ${statistics.netBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-450'}`}>
-                      {formatOMR(statistics.netBalance)}
-                    </p>
-                    <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2">
-                      فائض السيولة المتاحة
-                    </span>
-                  </div>
-
+                  {workspaceConfig.cardOrder.map((cardId) => {
+                    if (cardId === 'receipts') {
+                      return (
+                        <div 
+                          key="receipts"
+                          className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-emerald"
+                          style={{ backgroundColor: '#074907' }}
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent pointer-events-none" />
+                          <div className="p-2 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 mb-2">
+                            <TrendingUp className="w-5 h-5 text-emerald-500 animate-pulse" />
+                          </div>
+                          <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#035bf4' }}>
+                            إجمالي مبالغ القبض
+                          </span>
+                          <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ borderColor: '#26c831', color: '#070ff1' }}>
+                            {formatOMR(statistics.totalReceipts)}
+                          </p>
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2" style={{ color: '#38ec08' }}>
+                            العدد: <strong className="text-emerald-500 font-mono" style={{ color: 'inherit' }}>{statistics.receiptsCount}</strong> سندات
+                          </span>
+                        </div>
+                      );
+                    }
+                    if (cardId === 'payments') {
+                      return (
+                        <div 
+                          key="payments"
+                          className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-rose"
+                          style={{ backgroundColor: '#6a3034' }}
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-b from-rose-500/5 to-transparent pointer-events-none" />
+                          <div className="p-2 rounded-full bg-rose-500/10 dark:bg-rose-500/20 mb-2">
+                            <TrendingDown className="w-5 h-5 text-rose-500 animate-pulse" />
+                          </div>
+                          <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#b74040' }}>
+                            إجمالي مبالغ الصرف
+                          </span>
+                          <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ color: '#f50c0c' }}>
+                            {formatOMR(statistics.totalPayments)}
+                          </p>
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2" style={{ color: '#2aef0a' }}>
+                            العدد: <strong className="text-rose-500 font-mono" style={{ color: 'inherit' }}>{statistics.paymentsCount}</strong> سندات
+                          </span>
+                        </div>
+                      );
+                    }
+                    if (cardId === 'count') {
+                      return (
+                        <div 
+                          key="count"
+                          className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-indigo"
+                          style={{ backgroundColor: '#948d69' }}
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none" />
+                          <div className="p-2 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 mb-2">
+                            <Coins className="w-5 h-5 text-indigo-500 animate-bounce" />
+                          </div>
+                          <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans" style={{ color: '#01173e' }}>
+                            إجمالي السندات
+                          </span>
+                          <p className="text-lg sm:text-xl font-black text-gray-900 dark:text-white mt-1.5 font-mono tracking-tight leading-none" style={{ color: '#deee0d' }}>
+                            {statistics.totalVouchersCount} <span className="text-xs font-sans text-gray-400 dark:text-gray-500 font-bold" style={{ color: '#e3eb17' }}>سند</span>
+                          </p>
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2">
+                            سندات القبض والصرف
+                          </span>
+                        </div>
+                      );
+                    }
+                    if (cardId === 'balance') {
+                      return (
+                        <div 
+                          key="balance"
+                          className="w-48 h-48 sm:w-52 sm:h-52 rounded-full relative overflow-hidden group flex flex-col justify-center items-center text-center p-6 border select-none glow-card-primary"
+                          style={{ backgroundColor: '#7f747f' }}
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-b from-[var(--sidebar-active)]/5 to-transparent pointer-events-none" />
+                          <div className="p-2 rounded-full bg-sky-500/10 dark:bg-sky-500/20 mb-2">
+                            <Scale className="w-5 h-5" style={{ color: identity.primaryColor || '#0284c7' }} />
+                          </div>
+                          <span className="text-[10px] font-bold text-gray-500 dark:text-gray-300 transition-colors uppercase tracking-widest font-sans">
+                            صافي الرصيد المالي
+                          </span>
+                          <p className={`text-lg sm:text-xl font-black mt-1.5 font-mono tracking-tight leading-none ${statistics.netBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-450'}`}>
+                            {formatOMR(statistics.netBalance)}
+                          </p>
+                          <span className="text-[9px] text-gray-400 dark:text-gray-500 block mt-2">
+                            فائض السيولة المتاحة
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
                 </div>
               )}
 
@@ -1512,6 +1658,8 @@ export default function App() {
                 onEditVoucher={handleEditVoucher}
                 permissions={currentPermissions}
                 isManagerMode={isManagerMode}
+                initialDateFrom={archiveDateFilter?.from}
+                initialDateTo={archiveDateFilter?.to}
               />
             </div>
           )}
@@ -1521,6 +1669,12 @@ export default function App() {
               <QuarterlyReports
                 vouchers={vouchers}
                 identity={identity}
+                onNavigateToArchive={(from, to) => {
+                  setArchiveDateFilter({ from, to });
+                  setActiveTab('archive');
+                }}
+                permissions={currentPermissions}
+                isManagerMode={isManagerMode}
               />
             </div>
           )}
@@ -1546,11 +1700,24 @@ export default function App() {
             </div>
           )}
 
+          {activeTab === 'workspace' && isTabPermitted('workspace') && (
+            <div className="animate-fade-in print:hidden">
+              <WorkspaceControlPanel
+                config={workspaceConfig}
+                onUpdate={handleUpdateWorkspaceConfig}
+                onReset={handleResetWorkspaceConfig}
+              />
+            </div>
+          )}
+
           {activeTab === 'settings' && isTabPermitted('settings') && (
             <div className="animate-fade-in print:hidden">
               <SettingsPanel
                 identity={identity}
                 onIdentityUpdate={(newConfig) => setIdentity(newConfig)}
+                workspaceConfig={workspaceConfig}
+                onWorkspaceUpdate={handleUpdateWorkspaceConfig}
+                onWorkspaceReset={handleResetWorkspaceConfig}
                 onDatabaseReseted={handleDatabaseReseted}
                 currentVersion={CURRENT_VERSION}
                 updateState={updateState}

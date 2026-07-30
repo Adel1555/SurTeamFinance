@@ -6,7 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { Voucher, CharityProject, VisualIdentity, EmployeePermissions } from '../types';
 import { DatabaseService } from '../db';
-import { formatOMR, formatDate, patchGetComputedStyle, withOklchWorkaround } from '../utils';
+import { formatOMR, formatDate } from '../utils';
 import { 
   Heart, 
   Search, 
@@ -27,8 +27,7 @@ import {
   Eye,
   DollarSign
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { generatePDFInContainer, PDFPreviewModal, GeneratedPDF, PrintableContainer, PrintableHeader, PrintableTitleBar, PrintableSummaryGrid, PrintableSummaryCard, PrintableTable, PrintableFooter } from './PrintableTemplate';
 
 interface SponsorsPanelProps {
   vouchers: Voucher[];
@@ -211,160 +210,20 @@ export default function SponsorsPanel({
     }
   };
 
+  const [pdfPreviewData, setPdfPreviewData] = useState<GeneratedPDF | null>(null);
+
   const handleExportPDF = async () => {
     if (!canExportReports) return;
-    const reportElem = document.getElementById('printable-sponsors-report-section');
-    if (!reportElem) return;
 
     setIsExporting(true);
-    const restoreStyle = patchGetComputedStyle();
-    const isDark = document.documentElement.classList.contains("dark");
     try {
-      if (isDark) {
-        document.documentElement.classList.remove("dark");
-      }
-      // Temporarily show report on screen for canvas capture
-      reportElem.classList.remove('hidden');
-      reportElem.classList.add('block');
-
-      // Wait for fonts to load and resolve fully to guarantee absolute sharp Arabic rendering
-      if (document.fonts) {
-        await document.fonts.ready;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      await withOklchWorkaround(reportElem, async () => {
-        const canvas = await html2canvas(reportElem, {
-          scale: Math.max(2.5, window.devicePixelRatio * 2),
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          onclone: (clonedDoc) => {
-            // Remove dark class from html document element of the cloned document
-            clonedDoc.documentElement.classList.remove('dark');
-            clonedDoc.documentElement.style.setProperty('background-color', '#ffffff', 'important');
-            clonedDoc.documentElement.style.setProperty('color', '#111827', 'important');
-            clonedDoc.documentElement.style.setProperty('color-scheme', 'light', 'important');
-
-            if (clonedDoc.body) {
-              clonedDoc.body.style.setProperty('background-color', '#ffffff', 'important');
-              clonedDoc.body.style.setProperty('color', '#111827', 'important');
-              clonedDoc.body.style.setProperty('color-scheme', 'light', 'important');
-            }
-
-            const clonedReport = clonedDoc.getElementById('printable-sponsors-report-section');
-            if (clonedReport) {
-              clonedReport.style.setProperty('display', 'block', 'important');
-              clonedReport.style.setProperty('visibility', 'visible', 'important');
-              clonedReport.style.setProperty('background-color', '#ffffff', 'important');
-              clonedReport.style.setProperty('color', '#111827', 'important');
-              clonedReport.style.setProperty('color-scheme', 'light', 'important');
-              clonedReport.classList.remove('dark');
-
-              // Recursively strip dark classes and force print-safe styles on all descendants
-              const descendants = clonedReport.getElementsByTagName('*');
-              for (let i = 0; i < descendants.length; i++) {
-                const el = descendants[i] as HTMLElement;
-                el.classList.remove('dark');
-                
-                // Strip dark:* class selectors
-                const darkClasses: string[] = [];
-                el.classList.forEach((cls) => {
-                  if (cls.startsWith('dark:')) {
-                    darkClasses.push(cls);
-                  }
-                });
-                darkClasses.forEach((cls) => el.classList.remove(cls));
-
-                const tagName = el.tagName.toLowerCase();
-                const trElement = el.closest('tr');
-                const isReceiptRow = trElement && trElement.getAttribute('data-type') === 'receipt';
-                const isPaymentRow = trElement && trElement.getAttribute('data-type') === 'payment';
-
-                if (tagName === 'table' || tagName === 'thead' || tagName === 'tbody' || tagName === 'tr' || tagName === 'th' || tagName === 'td' || tagName === 'div' || tagName === 'span' || tagName === 'p' || tagName === 'h1' || tagName === 'h2' || tagName === 'h3') {
-                  if (isReceiptRow) {
-                    el.style.setProperty('background-color', '#ecfdf5', 'important');
-                    el.style.setProperty('color', '#065f46', 'important');
-                    el.style.setProperty('border-color', '#a7f3d0', 'important');
-                  } else if (isPaymentRow) {
-                    el.style.setProperty('background-color', '#fffbeb', 'important');
-                    el.style.setProperty('color', '#92400e', 'important');
-                    el.style.setProperty('border-color', '#fde68a', 'important');
-                  } else {
-                    if (tagName === 'th') {
-                      el.style.setProperty('background-color', '#f3f4f6', 'important');
-                      el.style.setProperty('color', '#111827', 'important');
-                    } else if (tagName === 'tr' && el.closest('thead')) {
-                      el.style.setProperty('background-color', '#f3f4f6', 'important');
-                    } else if (el.classList.contains('bg-gray-100') || el.classList.contains('bg-slate-100')) {
-                      el.style.setProperty('background-color', '#f3f4f6', 'important');
-                    } else if (tagName === 'div' && el.classList.contains('border-black')) {
-                      el.style.setProperty('border-color', '#e5e7eb', 'important');
-                    } else {
-                      // Standard fallback background to make sure there are no black containers
-                      const currentBg = window.getComputedStyle(el).backgroundColor;
-                      if (currentBg && (currentBg.includes('rgb(15') || currentBg.includes('rgb(9') || currentBg.includes('rgb(12') || currentBg.includes('rgb(2') || currentBg.includes('rgba(15') || currentBg.includes('rgb(0') || currentBg.includes('rgba(0'))) {
-                        el.style.setProperty('background-color', '#ffffff', 'important');
-                      }
-                    }
-                    
-                    // Specific text color adjustments for readability
-                    if (el.classList.contains('text-gray-500')) {
-                      el.style.setProperty('color', '#4b5563', 'important');
-                    } else if (el.classList.contains('text-gray-400')) {
-                      el.style.setProperty('color', '#9ca3af', 'important');
-                    } else if (el.classList.contains('text-gray-700')) {
-                      el.style.setProperty('color', '#374151', 'important');
-                    } else {
-                      el.style.setProperty('color', '#111827', 'important');
-                    }
-                  }
-                  el.style.setProperty('border-color', '#e5e7eb', 'important');
-                }
-              }
-            }
-          }
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
-
-        const imgWidth = 210; 
-        const pageHeight = 297; 
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        
-        let heightLeft = imgHeight;
-        let position = 0;
-
-        // Add first page
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-        heightLeft -= pageHeight;
-
-        // Loop to add subsequent pages if the content overflows A4 height
-        while (heightLeft > 0) {
-          position = -(imgHeight - heightLeft);
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-          heightLeft -= pageHeight;
-        }
-        
-        const reportTitle = activeView === 'donor' ? `Donor_Report_${selectedDonor}` : `Project_Report_${selectedProject}`;
-        pdf.save(`SurVolunteer_${reportTitle}.pdf`);
-      });
+      const reportTitle = activeView === 'donor' ? `Donor_Report_${selectedDonor}` : `Project_Report_${selectedProject}`;
+      const generated = await generatePDFInContainer('pdf-dedicated-sponsors-report', `SurVolunteer_${reportTitle}.pdf`);
+      setPdfPreviewData(generated);
     } catch (err) {
       console.error('Error exporting PDF:', err);
       alert('حدث خطأ أثناء تصدير التقرير، يرجى المحاولة مرة أخرى.');
     } finally {
-      reportElem.classList.remove('block');
-      reportElem.classList.add('hidden');
-      restoreStyle();
-      if (isDark) {
-        document.documentElement.classList.add("dark");
-      }
       setIsExporting(false);
     }
   };
@@ -1058,6 +917,72 @@ export default function SponsorsPanel({
           </div>
         </div>
       </div>
+
+      {/* Dedicated Printable Template for PDF Export (Isolated from UI) */}
+      <PrintableContainer id="pdf-dedicated-sponsors-report">
+        <PrintableHeader
+          identity={identity}
+          subtitle="سجل تقارير الداعمين والمشاريع"
+          badgeText={activeView === 'donor' ? "تقرير الداعمين" : "تقرير المشاريع والمبادرات"}
+          metadata={[
+            { label: "تاريخ الاستخراج", value: new Date().toLocaleDateString('ar-OM') },
+            { label: "إجمالي السندات", value: filteredVouchers.length },
+            { label: "نوع التقرير", value: activeView === 'donor' ? `الدافع: ${selectedDonor === 'all' ? 'جميع الداعمين' : selectedDonor}` : `المشروع: ${selectedProject === 'all' ? 'جميع المشاريع' : selectedProject}` }
+          ]}
+        />
+
+        <PrintableTitleBar
+          title={activeView === 'donor' 
+            ? `كشف الحساب المالي للداعم (${selectedDonor === 'all' ? 'جميع الداعمين' : selectedDonor})`
+            : `تقرير التدفق المالي للمشروع (${selectedProject === 'all' ? 'جميع المشاريع' : selectedProject})`
+          }
+        />
+
+        <PrintableSummaryGrid>
+          <PrintableSummaryCard
+            title="إجمالي الدعم / المقبوضات"
+            amount={formatOMR(financialTotals.receipts)}
+            subtext={`العدد: ${filteredVouchers.filter(v => v.type === 'receipt').length} سندات`}
+            type="positive"
+          />
+          <PrintableSummaryCard
+            title="إجمالي المصروفات"
+            amount={formatOMR(financialTotals.payments)}
+            subtext={`العدد: ${filteredVouchers.filter(v => v.type === 'payment').length} سندات`}
+            type="negative"
+          />
+          <PrintableSummaryCard
+            title="صافي الرصيد المتبقي"
+            amount={formatOMR(financialTotals.net)}
+            subtext="الفائض المالي المتاح للمشروع / الداعم"
+            type="neutral"
+          />
+        </PrintableSummaryGrid>
+
+        <PrintableTable headers={["رقم السند", "النوع", "التاريخ", "الدافع / المستفيد", "طريقة الدفع", "المبلغ (ر.ع.)", "البيان"]}>
+          {filteredVouchers.map((v) => {
+            const isReceipt = v.type === 'receipt';
+            return (
+              <tr key={v.id} className="text-black">
+                <td className="p-2 font-bold font-mono">{v.voucherNo}</td>
+                <td className="p-2 text-center font-bold">
+                  {isReceipt ? identity.receiptTerm : identity.paymentTerm}
+                </td>
+                <td className="p-2">{v.date}</td>
+                <td className="p-2 font-bold">{v.payerOrBeneficiary}</td>
+                <td className="p-2">{v.paymentMethod || 'نقداً'}</td>
+                <td className="p-2 font-bold font-mono text-left">{formatOMR(v.amount)}</td>
+                <td className="p-2 max-w-[200px] truncate">{v.description || '-'}</td>
+              </tr>
+            );
+          })}
+        </PrintableTable>
+
+        <PrintableFooter terms={identity.termsAndConditions} showSignature={identity.showSignatureBlock} />
+      </PrintableContainer>
+
+      {/* PDF Preview Modal */}
+      <PDFPreviewModal pdfData={pdfPreviewData} onClose={() => setPdfPreviewData(null)} />
 
     </div>
   );

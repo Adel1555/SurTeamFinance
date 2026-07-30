@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Voucher, VisualIdentity, VoucherType, EmployeePermissions } from '../types';
 import { formatDate, formatOMR } from '../utils';
 import { Search, Filter, Trash2, Printer, FileText, ArrowUpRight, ArrowDownRight, ArrowUpDown, RefreshCw, Calendar, ListFilter, Eye, Pencil } from 'lucide-react';
@@ -19,9 +19,11 @@ interface ArchivePanelProps {
   onEditVoucher: (voucher: Voucher) => void;
   permissions?: EmployeePermissions;
   isManagerMode?: boolean;
+  initialDateFrom?: string;
+  initialDateTo?: string;
 }
 
-export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPrintVoucher, onViewVoucher, onEditVoucher, permissions, isManagerMode }: ArchivePanelProps) {
+export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPrintVoucher, onViewVoucher, onEditVoucher, permissions, isManagerMode, initialDateFrom, initialDateTo }: ArchivePanelProps) {
   // Custom delete confirmation state (avoids iframe blocking dialogs)
   const [voucherToDelete, setVoucherToDelete] = useState<Voucher | null>(null);
   
@@ -105,9 +107,17 @@ export default function ArchivePanel({ vouchers, identity, onDeleteVoucher, onPr
   const [typeFilter, setTypeFilter] = useState<'all' | 'receipt' | 'payment'>('all');
   const [methodFilter, setMethodFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [datePreset, setDatePreset] = useState<'all' | 'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom'>('all');
+  const [dateFrom, setDateFrom] = useState(initialDateFrom || '');
+  const [dateTo, setDateTo] = useState(initialDateTo || '');
+  const [datePreset, setDatePreset] = useState<'all' | 'today' | 'week' | 'month' | 'quarter' | 'year' | 'custom'>(
+    initialDateFrom || initialDateTo ? 'custom' : 'all'
+  );
+
+  useEffect(() => {
+    if (initialDateFrom !== undefined) setDateFrom(initialDateFrom);
+    if (initialDateTo !== undefined) setDateTo(initialDateTo);
+    if (initialDateFrom || initialDateTo) setDatePreset('custom');
+  }, [initialDateFrom, initialDateTo]);
 
   // Extracts preset bounds relative to the accounting container system date
   const getPresetDates = (preset: string) => {

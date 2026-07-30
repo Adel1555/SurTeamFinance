@@ -158,3 +158,228 @@
   border-color: var(--primary-color, #0ea5e9);
 }
 
+/* -------------------------------------------------------------
+   UX & Visual Enhancements (150ms-250ms Snappy Transitions)
+   ------------------------------------------------------------- */
+
+/* Page & Tab Fade-Slide */
+@keyframes pageFadeSlide {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-fade {
+  animation: pageFadeSlide 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Modal Pop & Backdrop Fade */
+@keyframes modalPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes backdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-modal-backdrop {
+  animation: backdropFadeIn 180ms ease-out forwards;
+}
+
+.animate-modal-pop {
+  animation: modalPopIn 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Dropdown / Menu Slide */
+@keyframes menuSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-menu-slide {
+  animation: menuSlideIn 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Toast Notification Animation */
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-toast-slide {
+  animation: toastSlideIn 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes toastProgress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-toast-progress {
+  animation: toastProgress linear forwards;
+}
+
+/* Skeleton Loading Shimmer Animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.6s infinite linear;
+}
+
+/* -------------------------------------------------------------
+   BUTTON ENHANCEMENTS (Requirement 3)
+   - Hover motion, active touch scale, focus outline, ripple feedback
+   ------------------------------------------------------------- */
+button, 
+.btn-interactive,
+.theme-primary-btn, 
+.theme-btn-secondary, 
+.theme-btn-danger, 
+.theme-btn-success {
+  transition: background-color 150ms ease-out, 
+              border-color 150ms ease-out, 
+              box-shadow 150ms ease-out, 
+              color 150ms ease-out, 
+              transform 150ms ease-out;
+  position: relative;
+}
+
+/* Subtle Active Scale Feedback */
+button:active:not(:disabled),
+.btn-interactive:active:not(:disabled) {
+  transform: scale(0.97) translateY(0px) !important;
+}
+
+/* Accessibility Focus Ring */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--input-focus, var(--sidebar-active, #2563eb)) !important;
+  outline-offset: 2px !important;
+}
+
+/* Clear Disabled State */
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+  filter: grayscale(20%) !important;
+}
+
+/* -------------------------------------------------------------
+   TABLE ENHANCEMENTS (Requirement 4)
+   - Sticky header, row hover highlight, selected row styling
+   ------------------------------------------------------------- */
+.table-container {
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--table-header-bg, #f8fafc) !important;
+  color: var(--text-main, #0f172a) !important;
+  backdrop-filter: blur(8px);
+  border-bottom: 2px solid var(--card-border, #cbd5e1) !important;
+}
+
+tbody tr {
+  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+tbody tr:hover {
+  background-color: var(--table-row-hover-bg, rgba(37, 99, 235, 0.04)) !important;
+}
+
+tbody tr.selected, 
+tbody tr.active {
+  background-color: var(--table-row-active-bg, rgba(37, 99, 235, 0.08)) !important;
+  border-right: 3px solid var(--sidebar-active, #2563eb) !important;
+}
+
+/* -------------------------------------------------------------
+   INPUT FIELD ENHANCEMENTS (Requirement 6)
+   - Focus ring, error states, smooth transitions
+   ------------------------------------------------------------- */
+input, select, textarea {
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--input-focus, #2563eb) !important;
+  box-shadow: 0 0 0 3px var(--card-glow, rgba(37, 99, 235, 0.15)) !important;
+  outline: none !important;
+}
+
+.input-has-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18) !important;
+}
+
+/* -------------------------------------------------------------
+   MODAL ENHANCEMENTS & DRAGGABLE HEADER (Requirement 5)
+   ------------------------------------------------------------- */
+.modal-draggable-header {
+  cursor: move;
+  user-select: none;
+}
+
+.modal-content-scroll {
+  max-height: calc(85vh - 70px);
+  overflow-y: auto;
+}
+
+

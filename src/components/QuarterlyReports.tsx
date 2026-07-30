@@ -4,18 +4,27 @@
  */
 
 import { useState, useMemo } from 'react';
-import { Voucher, VisualIdentity } from '../types';
-import { formatOMR, patchGetComputedStyle, withOklchWorkaround } from '../utils';
-import { FileDown, Calendar, ArrowUpRight, ArrowDownRight, Scale, Printer, NotebookTabs, Loader2, Download } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { Voucher, VisualIdentity, EmployeePermissions } from '../types';
+import { formatOMR, exportToExcelCSV } from '../utils';
+import { FileDown, Calendar, ArrowUpRight, ArrowDownRight, Scale, Printer, NotebookTabs, Loader2, Download, Eye, FileText, FileSpreadsheet } from 'lucide-react';
+import PrintFilteredVouchers from './PrintFilteredVouchers';
+import { generatePDFInContainer, PDFPreviewModal, PDFPreviewErrorBoundary, GeneratedPDF, PrintableContainer, PrintableHeader, PrintableTitleBar, PrintableSummaryGrid, PrintableSummaryCard, PrintableTable, PrintableFooter } from './PrintableTemplate';
 
 interface QuarterlyReportsProps {
   vouchers: Voucher[];
   identity: VisualIdentity;
+  onNavigateToArchive?: (dateFrom: string, dateTo: string) => void;
+  permissions?: EmployeePermissions;
+  isManagerMode?: boolean;
 }
 
-export default function QuarterlyReports({ vouchers, identity }: QuarterlyReportsProps) {
+export default function QuarterlyReports({ vouchers, identity, onNavigateToArchive, permissions, isManagerMode }: QuarterlyReportsProps) {
+  const [detailModalConfig, setDetailModalConfig] = useState<{
+    isOpen: boolean;
+    vouchers: Voucher[];
+    title: string;
+    autoPDF: boolean;
+  } | null>(null);
   // Allow filtering reports by Year (default to current year or maximum year in vouchers)
   const availableYears = useMemo(() => {
     const years = new Set<string>();
@@ -102,6 +111,52 @@ export default function QuarterlyReports({ vouchers, identity }: QuarterlyReport
   const [isExporting, setIsExporting] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
 
+  // Helper to dynamically derive quarter date range according to selected fiscal year
+  const getQuarterRange = (qIndex: number, year: string) => {
+    const ranges = [
+      { from: `${year}-01-01`, to: `${year}-03-31`, label: 'الربع الأول' },
+      { from: `${year}-04-01`, to: `${year}-06-30`, label: 'الربع الثاني' },
+      { from: `${year}-07-01`, to: `${year}-09-30`, label: 'الربع الثالث' },
+      { from: `${year}-10-01`, to: `${year}-12-31`, label: 'الربع الرابع' },
+    ];
+    return ranges[qIndex] || ranges[0];
+  };
+
+  const handleViewQuarterDetails = (qIndex: number) => {
+    const range = getQuarterRange(qIndex, selectedYear);
+    const qVouchers = vouchers.filter(v => v.date && v.date >= range.from && v.date <= range.to);
+
+    setDetailModalConfig({
+      isOpen: true,
+      vouchers: qVouchers,
+      title: `كشف تفصيلي - ${range.label} (${selectedYear})`,
+      autoPDF: false,
+    });
+
+    if (onNavigateToArchive) {
+      onNavigateToArchive(range.from, range.to);
+    }
+  };
+
+  const handleExportQuarterPDF = (qIndex: number) => {
+    const range = getQuarterRange(qIndex, selectedYear);
+    const qVouchers = vouchers.filter(v => v.date && v.date >= range.from && v.date <= range.to);
+
+    setDetailModalConfig({
+      isOpen: true,
+      vouchers: qVouchers,
+      title: `كشف تفصيلي - ${range.label} (${selectedYear})`,
+      autoPDF: true,
+    });
+  };
+
+  const handleExportQuarterExcel = (qIndex: number) => {
+    const range = getQuarterRange(qIndex, selectedYear);
+    const qVouchers = vouchers.filter(v => v.date && v.date >= range.from && v.date <= range.to);
+
+    exportToExcelCSV(qVouchers, identity.receiptTerm, identity.paymentTerm);
+  };
+
   const handlePrintReport = async () => {
     setIsPrinting(true);
     const isDark = document.documentElement.classList.contains("dark");
@@ -124,56 +179,17 @@ export default function QuarterlyReports({ vouchers, identity }: QuarterlyReport
     }
   };
 
+  const [pdfPreviewData, setPdfPreviewData] = useState<GeneratedPDF | null>(null);
+
   const handleExportPDF = async () => {
-    const reportElem = document.getElementById('printable-report-section');
-    if (!reportElem) return;
-
     setIsExporting(true);
-    const restoreStyle = patchGetComputedStyle();
-    const isDark = document.documentElement.classList.contains("dark");
     try {
-      if (isDark) {
-        document.documentElement.classList.remove("dark");
-      }
-      // Temporarily reveal the report layout for capturing
-      reportElem.classList.remove('hidden');
-      reportElem.classList.add('block');
-
-      await withOklchWorkaround(reportElem, async () => {
-        const canvas = await html2canvas(reportElem, {
-          scale: 1.8, // Slightly optimized scale for stability and speed
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff'
-        });
-
-        const imgData = canvas.toDataURL('image/jpeg', 0.95); // Optimized JPEG quality
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        });
-
-        const imgWidth = 210; // A4 width in mm
-        const pageHeight = 297; // A4 height in mm
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        
-        const topMargin = imgHeight < pageHeight ? (pageHeight - imgHeight) / 2 : 10;
-        pdf.addImage(imgData, 'JPEG', 0, topMargin, imgWidth, imgHeight, undefined, 'FAST');
-        
-        pdf.save(`SurVolunteer_Financial_Report_${selectedYear}.pdf`);
-      });
+      const generated = await generatePDFInContainer('pdf-dedicated-quarterly-report', `SurVolunteer_Financial_Report_${selectedYear}.pdf`);
+      setPdfPreviewData(generated);
     } catch (err) {
       console.error('Error exporting financial report PDF:', err);
       alert('حدث خطأ أثناء تصدير التقرير المالي، يرجى المحاولة مرة أخرى.');
     } finally {
-      // Restore standard print class bindings
-      reportElem.classList.remove('block');
-      reportElem.classList.add('hidden');
-      restoreStyle();
-      if (isDark) {
-        document.documentElement.classList.add("dark");
-      }
       setIsExporting(false);
     }
   };
@@ -401,9 +417,110 @@ export default function QuarterlyReports({ vouchers, identity }: QuarterlyReport
               <span>مجموع الحركات: {q.totalVouchers}</span>
             </div>
 
+            {/* Quarter Card Action Buttons */}
+            <div className="pt-3 border-t border-gray-100 dark:border-zinc-800/80 flex items-center justify-between gap-2 flex-row-reverse">
+              {/* 1. عرض التفاصيل */}
+              <button
+                type="button"
+                onClick={() => handleViewQuarterDetails(idx)}
+                style={{ backgroundColor: `${identity.primaryColor}15`, color: identity.primaryColor }}
+                className="flex-1 py-2 px-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 hover:opacity-90 hover:shadow-sm cursor-pointer border border-blue-200/40 dark:border-blue-900/40"
+                title="عرض التقرير المالي التفصيلي وتصفية الأرشيف"
+              >
+                <Eye className="w-3.5 h-3.5 shrink-0" />
+                <span>عرض التفاصيل</span>
+              </button>
+
+              {/* 2. PDF */}
+              <button
+                type="button"
+                onClick={() => handleExportQuarterPDF(idx)}
+                className="flex-1 py-2 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 shadow-sm hover:shadow cursor-pointer"
+                title="تصدير التقرير التفصيلي كملف PDF"
+              >
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span>PDF</span>
+              </button>
+
+              {/* 3. Excel */}
+              <button
+                type="button"
+                onClick={() => handleExportQuarterExcel(idx)}
+                className="flex-1 py-2 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1 shadow-sm hover:shadow cursor-pointer"
+                title="تصدير كشف السندات كملف Excel CSV"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                <span>Excel</span>
+              </button>
+            </div>
+
           </div>
         ))}
       </div>
+
+      {detailModalConfig && detailModalConfig.isOpen && (
+        <PrintFilteredVouchers
+          vouchers={detailModalConfig.vouchers}
+          selectedMethod={detailModalConfig.title}
+          identity={identity}
+          onClose={() => setDetailModalConfig(null)}
+          permissions={permissions}
+          isManagerMode={isManagerMode}
+          autoExportPDF={detailModalConfig.autoPDF}
+        />
+      )}
+
+      {/* Dedicated Printable Template for PDF Export (Isolated from UI) */}
+      <PrintableContainer id="pdf-dedicated-quarterly-report">
+        <PrintableHeader
+          identity={identity}
+          subtitle="لجنة الشؤون المالية واللوجستية"
+          badgeText={`التقرير المالي لعام ${selectedYear}`}
+          metadata={[
+            { label: "السنة المالية", value: selectedYear },
+            { label: "تاريخ الاستخراج", value: new Date().toLocaleDateString('ar-OM') },
+            { label: "إجمالي السندات", value: yearlyTotals.vouchersCount }
+          ]}
+        />
+
+        <PrintableTitleBar title={`التقرير المالي السنوي - ملخص الأرباع لعام ${selectedYear}`} />
+
+        <PrintableSummaryGrid>
+          <PrintableSummaryCard
+            title="إجمالي المقبوضات السنوية"
+            amount={formatOMR(yearlyTotals.receipts)}
+            subtext={`عدد السندات: ${yearlyTotals.recCount}`}
+            type="positive"
+          />
+          <PrintableSummaryCard
+            title="إجمالي المصروفات السنوية"
+            amount={formatOMR(yearlyTotals.payments)}
+            subtext={`عدد السندات: ${yearlyTotals.payCount}`}
+            type="negative"
+          />
+          <PrintableSummaryCard
+            title="صافي رصيد السنة"
+            amount={formatOMR(yearlyTotals.net)}
+            subtext="الفائض / العجز المالي التراكمي"
+            type="neutral"
+          />
+        </PrintableSummaryGrid>
+
+        <PrintableTable headers={["الربع السنوي", "الأشهر", "المقبوضات (ر.ع.)", "المصروفات (ر.ع.)", "صافي الرصيد (ر.ع.)", "إجمالي الحركات"]}>
+          {quarterlyData.map((q, idx) => (
+            <tr key={idx} style={{ backgroundColor: '#ffffff', color: '#000000' }}>
+              <td className="p-2 font-bold" style={{ color: '#000000', backgroundColor: '#ffffff' }}>{q.name}</td>
+              <td className="p-2 font-bold" style={{ color: '#374151', backgroundColor: '#ffffff' }}>{q.monthsLabel}</td>
+              <td className="p-2 font-bold font-mono text-left" style={{ color: '#000000', backgroundColor: '#ffffff' }}>{formatOMR(q.receipts)}</td>
+              <td className="p-2 font-bold font-mono text-left" style={{ color: '#000000', backgroundColor: '#ffffff' }}>{formatOMR(q.payments)}</td>
+              <td className="p-2 font-bold font-mono text-left" style={{ color: '#000000', backgroundColor: '#ffffff' }}>{formatOMR(q.net)}</td>
+              <td className="p-2 text-center font-bold" style={{ color: '#000000', backgroundColor: '#ffffff' }}>{q.totalVouchers}</td>
+            </tr>
+          ))}
+        </PrintableTable>
+
+        <PrintableFooter terms={identity.termsAndConditions} showSignature={identity.showSignatureBlock} />
+      </PrintableContainer>
 
       {/* Embedded stylings strictly for reports table print scaling */}
       <style>{`
@@ -446,6 +563,14 @@ export default function QuarterlyReports({ vouchers, identity }: QuarterlyReport
           }
         }
       `}</style>
+
+      {/* PDF Preview Modal with Local Error Boundary */}
+      <PDFPreviewErrorBoundary>
+        <PDFPreviewModal
+          pdfData={pdfPreviewData}
+          onClose={() => setPdfPreviewData(null)}
+        />
+      </PDFPreviewErrorBoundary>
     </div>
   );
 }

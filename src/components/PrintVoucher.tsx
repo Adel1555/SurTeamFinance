@@ -5,11 +5,10 @@
 
 import { useState } from 'react';
 import { Voucher, VisualIdentity, EmployeePermissions } from '../types';
-import { formatOMR, formatDate, tafqeet, patchGetComputedStyle, withOklchWorkaround } from '../utils';
-import { Printer, Download, X, Stamp, ShieldCheck, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { formatOMR, formatDate, tafqeet } from '../utils';
+import { Printer, Download, X } from 'lucide-react';
 import Logo from './Logo';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { generatePDFInContainer, PDFPreviewModal, GeneratedPDF, PrintableContainer, PrintableHeader, PrintableTitleBar, PrintableFooter } from './PrintableTemplate';
 
 interface PrintVoucherProps {
   voucher: Voucher | null;
@@ -113,75 +112,18 @@ export default function PrintVoucher({ voucher, identity, onClose, permissions, 
     }
   };
 
+  const [pdfPreviewData, setPdfPreviewData] = useState<GeneratedPDF | null>(null);
+
   const handleExportPDF = async () => {
     if (!isPDFPermitted) {
       return;
     }
-    console.log("PDF BUTTON CLICKED");
-
-    const element = document.getElementById("printable-voucher");
-    console.log("PRINTABLE ELEMENT EXISTS:", !!element);
-    console.log("PRINTABLE ELEMENT ID:", element?.id);
-
-    if (!element) {
-      alert("Printable voucher not found");
-      return;
-    }
-
-    const isDark = document.documentElement.classList.contains("dark");
     try {
-      // 1. Temporarily remove dark mode class to force white background and black text
-      if (isDark) {
-        document.documentElement.classList.remove("dark");
-      }
-
-      // 2. Load the fonts dynamically if they are not already loaded
-      if (!document.getElementById("arabic-pdf-fonts")) {
-        const link = document.createElement("link");
-        link.id = "arabic-pdf-fonts";
-        link.rel = "stylesheet";
-        link.href = "https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Tajawal:wght@400;700;900&display=swap";
-        document.head.appendChild(link);
-      }
-
-      // 3. Wait for fonts to load
-      if (document.fonts) {
-        await document.fonts.ready;
-      }
-      
-      // Delay to ensure full rendering of fonts is complete
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const canvas = await withOklchWorkaround(element, async () => {
-        return await html2canvas(element, {
-          scale: 1.8, // Slightly reduced scale for high efficiency and preventing crashes
-          useCORS: true,
-          backgroundColor: "#ffffff"
-        });
-      });
-
-      if (!canvas || canvas.width === 0 || canvas.height === 0) {
-        throw new Error("توليد الصورة فشل، حجم المساحة فارغ.");
-      }
-
-      // Use JPEG with 0.95 quality for memory and speed optimization
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
-      const pdf = new jsPDF("p", "mm", "a4");
-
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const imgWidth = pageWidth - 20;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      pdf.addImage(imgData, "JPEG", 10, 10, imgWidth, imgHeight);
-      pdf.save(`voucher-${voucher.voucherNo || voucher.id}.pdf`);
+      const generated = await generatePDFInContainer('pdf-dedicated-voucher', `voucher-${voucher.voucherNo || voucher.id}.pdf`);
+      setPdfPreviewData(generated);
     } catch (e) {
-      console.error(e);
-      alert("حدث خطأ أثناء تصدير ملف PDF، يرجى المحاولة مرة أخرى.");
-    } finally {
-      // Restore dark mode if active
-      if (isDark) {
-        document.documentElement.classList.add("dark");
-      }
+      console.error('Error exporting voucher PDF:', e);
+      alert('حدث خطأ أثناء تصدير ملف PDF، يرجى المحاولة مرة أخرى.');
     }
   };
 
@@ -191,7 +133,8 @@ export default function PrintVoucher({ voucher, identity, onClose, permissions, 
   const personRoleLabel = isReceipt ? 'واستلمنا من الفاضل / الجهة' : 'وصرفنا إلى الفاضل / الجهة';
   
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto print-overlay-wrapper">
+    <>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto print-overlay-wrapper">
       
       {/* Modal Container */}
       <div className="bg-white/95 dark:bg-[#0c203b] rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] print:max-h-none print:shadow-none print:rounded-none border border-gray-100 dark:border-blue-900/40">
@@ -439,6 +382,59 @@ export default function PrintVoucher({ voucher, identity, onClose, permissions, 
 
       </div>
 
+      {/* Dedicated Printable Template for PDF Export (Isolated from UI) */}
+      <PrintableContainer id="pdf-dedicated-voucher">
+        <PrintableHeader
+          identity={identity}
+          subtitle="لجنة الشؤون المالية واللوجستية"
+          badgeText="سند معتمد رسمياً"
+          metadata={[
+            { label: "رقم السند", value: voucher.voucherNo },
+            { label: "التاريخ", value: voucher.date },
+            { label: "النوع", value: isReceipt ? 'قبض' : 'صرف' }
+          ]}
+        />
+
+        <PrintableTitleBar title={voucherTerm} />
+
+        <div className="space-y-4 text-xs text-black mb-6">
+          <div className="flex justify-between items-center gap-4 p-3 border border-black bg-gray-50 rounded">
+            <div>
+              <span className="font-bold text-gray-700">المبلغ: </span>
+              <span className="font-black font-mono text-sm text-black">{formatOMR(voucher.amount, false)} ر.ع.</span>
+            </div>
+            <div>
+              <span className="font-bold text-gray-700">طريقة الدفع: </span>
+              <span className="font-extrabold text-black">{voucher.paymentMethod}</span>
+            </div>
+          </div>
+
+          <div className="border-b border-gray-300 pb-2">
+            <span className="font-bold text-gray-700">{personRoleLabel}: </span>
+            <span className="font-black text-black">{voucher.payerOrBeneficiary}</span>
+          </div>
+
+          <div className="border-b border-gray-300 pb-2">
+            <span className="font-bold text-gray-700">قيمة وقدره (بالأحرف): </span>
+            <span className="font-bold text-black decoration-double underline">{tafqeet(voucher.amount)}</span>
+          </div>
+
+          <div className="border-b border-gray-300 pb-2">
+            <span className="font-bold text-gray-700">وذلك لغرض / بيان: </span>
+            <span className="text-black">{voucher.description || 'بلا بيان توضيحي'}</span>
+          </div>
+
+          {voucher.notes && (
+            <div className="border-b border-gray-300 pb-2">
+              <span className="font-bold text-gray-700">ملاحظات إضافية: </span>
+              <span className="text-gray-800 italic">{voucher.notes}</span>
+            </div>
+          )}
+        </div>
+
+        <PrintableFooter terms={identity.termsAndConditions} showSignature={identity.showSignatureBlock} />
+      </PrintableContainer>
+
       {/* Embedded print-only CSS injection to force proper printing page sizes, color backgrounds, and margin resets */}
       <style>{`
         @media print {
@@ -528,6 +524,11 @@ export default function PrintVoucher({ voucher, identity, onClose, permissions, 
           }
         }
       `}</style>
-    </div>
+
+      </div>
+
+      {/* PDF Preview Modal */}
+      <PDFPreviewModal pdfData={pdfPreviewData} onClose={() => setPdfPreviewData(null)} />
+    </>
   );
 }

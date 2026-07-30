@@ -157,13 +157,13 @@ export default function VoucherDetailsModal({ voucher, identity, onClose, onPrin
     identity.buttonStyle === 'rounded' ? 'rounded-xl' : 'rounded-full';
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden" dir="rtl">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto print:hidden animate-modal-backdrop" dir="rtl">
       
       {/* Modal Container */}
-      <div className={`w-full max-w-2xl ${modalStyleClass} overflow-hidden shadow-2xl flex flex-col max-h-[90vh] text-right`}>
+      <div className={`w-full max-w-2xl ${modalStyleClass} overflow-hidden shadow-2xl flex flex-col max-h-[90vh] text-right animate-modal-pop`}>
         
         {/* Header bar */}
-        <div className="flex justify-between items-center bg-gray-50 dark:bg-zinc-900/60 px-6 py-4 border-b border-gray-100 dark:border-zinc-800">
+        <div className="flex justify-between items-center bg-gray-50 dark:bg-zinc-900/60 px-6 py-4 border-b border-gray-100 dark:border-zinc-800 modal-draggable-header">
           <h3 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
             <Tag className="w-4 h-4" style={{ color: identity.primaryColor }} />
             تفاصيل السند المالي المكتمل

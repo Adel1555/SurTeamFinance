@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Voucher, VisualIdentity, EmployeePermissions } from '../types';
-import { formatOMR, formatDate, withOklchWorkaround } from '../utils';
+import { formatOMR, formatDate } from '../utils';
 import { Printer, Download, X, FileText, Loader2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import Logo from './Logo';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { generatePDFInContainer, PDFPreviewModal, GeneratedPDF, PrintableContainer, PrintableHeader, PrintableTitleBar, PrintableSummaryGrid, PrintableSummaryCard, PrintableTable, PrintableFooter } from './PrintableTemplate';
 
 interface PrintFilteredVouchersProps {
   vouchers: Voucher[];
@@ -18,9 +17,10 @@ interface PrintFilteredVouchersProps {
   onClose: () => void;
   permissions?: EmployeePermissions;
   isManagerMode?: boolean;
+  autoExportPDF?: boolean;
 }
 
-export default function PrintFilteredVouchers({ vouchers, selectedMethod, identity, onClose, permissions, isManagerMode }: PrintFilteredVouchersProps) {
+export default function PrintFilteredVouchers({ vouchers, selectedMethod, identity, onClose, permissions, isManagerMode, autoExportPDF }: PrintFilteredVouchersProps) {
   const [isExporting, setIsExporting] = useState(false);
 
   const currentPermissions = (() => {
@@ -120,99 +120,38 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
     }
   };
 
+  const [pdfPreviewData, setPdfPreviewData] = useState<GeneratedPDF | null>(null);
+
   const handleExportPDF = async () => {
     setIsExporting(true);
-    const element = document.getElementById("printable-report-card");
-    if (!element) {
-      alert("لم يتم العثور على منطقة التقرير القابلة للطباعة.");
-      setIsExporting(false);
-      return;
-    }
-
-    const isDark = document.documentElement.classList.contains("dark");
     try {
-      // 1. Temporarily remove dark mode class to force white background and black text
-      if (isDark) {
-        document.documentElement.classList.remove("dark");
-      }
-
-      // 2. Ensure fonts are loaded
-      if (!document.getElementById("arabic-pdf-fonts")) {
-        const link = document.createElement("link");
-        link.id = "arabic-pdf-fonts";
-        link.rel = "stylesheet";
-        link.href = "https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&family=Tajawal:wght@400;700;900&display=swap";
-        document.head.appendChild(link);
-      }
-
-      if (document.fonts) {
-        await document.fonts.ready;
-      }
-      
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const canvas = await withOklchWorkaround(element, async () => {
-        return await html2canvas(element, {
-          scale: Math.max(2.5, window.devicePixelRatio * 2), // High resolution scale for ultra-sharp Arabic text
-          useCORS: true,
-          backgroundColor: "#ffffff"
-        });
-      });
-
-      if (!canvas || canvas.width === 0 || canvas.height === 0) {
-        throw new Error("توليد الصورة فشل، حجم المساحة فارغ.");
-      }
-
-      // Use PNG for ultra-sharp text-heavy reports to prevent lossy JPEG artifact blurriness
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const imgWidth = pageWidth - (margin * 2);
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = margin;
-
-      // Draw the first page
-      pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight, undefined, 'FAST');
-      heightLeft -= (pageHeight - margin * 2);
-
-      // Loop to add subsequent pages with high resolution slicing
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight + margin;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight, undefined, 'FAST');
-        heightLeft -= pageHeight;
-      }
-
       const methodText = selectedMethod === 'all' ? 'الكل' : selectedMethod;
       const pdfName = `report-payment-method-${methodText}-${new Date().toISOString().split('T')[0]}.pdf`;
-      pdf.save(pdfName);
 
-      // Record backup metadata for PDF export
-      localStorage.setItem('lastManualBackupDate', Date.now().toString());
-      localStorage.setItem('lastManualBackupType', 'PDF');
-      localStorage.setItem('lastManualBackupFileName', pdfName);
-      localStorage.setItem('lastBackupCompletedDate', Date.now().toString());
+      const generated = await generatePDFInContainer('pdf-dedicated-filtered-vouchers', pdfName);
+      setPdfPreviewData(generated);
     } catch (e) {
-      console.error(e);
-      alert("حدث خطأ أثناء تصدير ملف PDF، يرجى المحاولة مرة أخرى.");
+      console.error('Error exporting filtered vouchers PDF:', e);
+      alert('حدث خطأ أثناء تصدير ملف PDF، يرجى المحاولة مرة أخرى.');
     } finally {
-      // Restore dark mode if it was active
-      if (isDark) {
-        document.documentElement.classList.add("dark");
-      }
       setIsExporting(false);
     }
   };
 
+  useEffect(() => {
+    if (autoExportPDF && isPDFPermitted) {
+      const timer = setTimeout(() => {
+        handleExportPDF();
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [autoExportPDF, isPDFPermitted]);
+
   const paymentMethodLabel = selectedMethod === 'all' ? 'جميع طرق الدفع والصرف' : selectedMethod;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto print-overlay-wrapper">
+    <>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto print-overlay-wrapper">
       
       {/* Modal Container */}
       <div className="bg-white/95 dark:bg-[#0c203b] rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] print:max-h-none print:shadow-none print:rounded-none border border-gray-100 dark:border-blue-900/40">
@@ -473,6 +412,64 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
 
       </div>
 
+      {/* Dedicated Printable Template for PDF Export (Isolated from UI) */}
+      <PrintableContainer id="pdf-dedicated-filtered-vouchers">
+        <PrintableHeader
+          identity={identity}
+          subtitle="لجنة الشؤون المالية واللوجستية"
+          badgeText="تقرير مالي مفصل"
+          metadata={[
+            { label: "تاريخ الاستخراج", value: new Date().toLocaleDateString('ar-OM') },
+            { label: "عدد السندات", value: vouchers.length },
+            { label: "طريقة الدفع", value: paymentMethodLabel }
+          ]}
+        />
+
+        <PrintableTitleBar title={`تقرير السندات حسب طريقة الدفع (${paymentMethodLabel})`} />
+
+        <PrintableSummaryGrid>
+          <PrintableSummaryCard
+            title="إجمالي المقبوضات"
+            amount={formatOMR(totalReceipts)}
+            subtext={`العدد: ${vouchers.filter(v => v.type === 'receipt').length} سندات`}
+            type="positive"
+          />
+          <PrintableSummaryCard
+            title="إجمالي المصروفات"
+            amount={formatOMR(totalPayments)}
+            subtext={`العدد: ${vouchers.filter(v => v.type === 'payment').length} سندات`}
+            type="negative"
+          />
+          <PrintableSummaryCard
+            title="صافي رصيد التصفية"
+            amount={formatOMR(netBalance)}
+            subtext="الفرق الإجمالي للتدفقات المالية"
+            type="neutral"
+          />
+        </PrintableSummaryGrid>
+
+        <PrintableTable headers={["رقم السند", "النوع", "التاريخ", "الدافع / المستفيد", "طريقة الدفع", "المبلغ", "البيان (وذلك عن)"]}>
+          {vouchers.map((v) => {
+            const isReceipt = v.type === 'receipt';
+            return (
+              <tr key={v.id} className="text-black">
+                <td className="p-2 font-bold font-mono">{v.voucherNo}</td>
+                <td className="p-2 text-center font-bold">
+                  {isReceipt ? identity.receiptTerm : identity.paymentTerm}
+                </td>
+                <td className="p-2">{v.date}</td>
+                <td className="p-2 font-bold">{v.payerOrBeneficiary}</td>
+                <td className="p-2">{v.paymentMethod || 'نقداً'}</td>
+                <td className="p-2 font-bold font-mono text-left">{formatOMR(v.amount)}</td>
+                <td className="p-2 max-w-[200px] truncate">{v.description || '-'}</td>
+              </tr>
+            );
+          })}
+        </PrintableTable>
+
+        <PrintableFooter terms={identity.termsAndConditions} showSignature={identity.showSignatureBlock} />
+      </PrintableContainer>
+
       <style>{`
         @media print {
           header, nav, aside, footer, button, select, .print\\:hidden {
@@ -556,6 +553,22 @@ export default function PrintFilteredVouchers({ vouchers, selectedMethod, identi
           }
         }
       `}</style>
-    </div>
+
+      </div>
+
+      {/* PDF Preview Modal */}
+      <PDFPreviewModal
+        pdfData={pdfPreviewData}
+        onClose={() => setPdfPreviewData(null)}
+        onConfirmSave={() => {
+          localStorage.setItem('lastManualBackupDate', Date.now().toString());
+          localStorage.setItem('lastManualBackupType', 'PDF');
+          if (pdfPreviewData) {
+            localStorage.setItem('lastManualBackupFileName', pdfPreviewData.filename);
+          }
+          localStorage.setItem('lastBackupCompletedDate', Date.now().toString());
+        }}
+      />
+    </>
   );
 }

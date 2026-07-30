@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { AppDatabase, Voucher, VisualIdentity, VoucherType, YearlyArchive, CharityProject } from './types';
+import { AppDatabase, Voucher, VisualIdentity, VoucherType, YearlyArchive, CharityProject, WorkspaceConfig, DEFAULT_WORKSPACE_CONFIG } from './types';
 
 const STORAGE_KEY = 'sur_volunteer_finance_db';
+const WORKSPACE_STORAGE_KEY = 'sur_workspace_layout_config';
 
 export const DEFAULT_PROJECTS: CharityProject[] = [
   { id: 'proj_general', name: 'تبرع عام / غير مخصص', isActive: true, createdAt: new Date('2026-01-01').toISOString() },
@@ -562,6 +563,30 @@ export class DatabaseService {
       db.projects = projects.filter(p => p.id !== id);
       this.saveDB(db);
       return { success: true, deleted: true };
+    }
+  }
+
+  public static getWorkspaceConfig(): WorkspaceConfig {
+    try {
+      const data = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+      if (data) {
+        const parsed = JSON.parse(data);
+        return {
+          ...DEFAULT_WORKSPACE_CONFIG,
+          ...parsed
+        };
+      }
+    } catch (e) {
+      console.error('Failed to load workspace config', e);
+    }
+    return { ...DEFAULT_WORKSPACE_CONFIG };
+  }
+
+  public static saveWorkspaceConfig(config: WorkspaceConfig): void {
+    try {
+      localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(config));
+    } catch (e) {
+      console.error('Failed to save workspace config', e);
     }
   }
 }
